@@ -1,133 +1,151 @@
-# PHẦN MỀM CHẤM CÔNG TRÊN MẠNG LAN
+﻿# PHẦN MỀM CHẤM CÔNG TRÊN MẠNG LAN
 ## Mô Tả Các Module Chức Năng
 
-> **Môn học**: Lập Trình Mạng  
-> **Công nghệ**: Spring Boot + React + MySQL + WebSocket  
+> **Môn học**: Lập Trình Mạng
+> **Kiến trúc**: Microservices — Spring Boot (Java) + Python FastAPI + React
 > **Môi trường**: Mạng nội bộ LAN (không cần Internet)
+
+| Ký hiệu | Ý nghĩa |
+|---------|---------|
+| ☕ `[Java]` | Tính năng do **Spring Boot** thực thi — Member 1 hoặc 3 phụ trách |
+| 🐍 `[Python]` | Tính năng do **Python FastAPI** thực thi — Member 2 phụ trách |
+| ⚛️ `[React]` | Tính năng do **React** thực thi — Member 4 hoặc 5 phụ trách |
 
 ---
 
 ## Module 1: Chấm Công (Attendance)
 
+> 🐍 **Thực thi bởi**: Python FastAPI (Member 2)
+
 Trung tâm của hệ thống — ghi nhận toàn bộ hoạt động vào/ra của nhân viên theo thời gian thực.
 
-### 1.1. Chấm Công Vào / Ra
-1.1.1. Nhân viên đăng nhập và bấm nút **"Chấm Công Vào"** — hệ thống tự động ghi nhận giờ vào, địa chỉ IP máy tính.  
-1.1.2. Cuối ca, nhân viên bấm **"Chấm Công Ra"** — hệ thống tính tổng số giờ làm trong ngày.  
-1.1.3. Tự động ghi nhận trạng thái: **Đúng giờ / Đi muộn / Về sớm** dựa trên ca làm việc đã được phân công.
+### 1.1. Chấm Công Vào / Ra 🐍
+1.1.1. Nhân viên đăng nhập và bấm nút "Chấm Công Vào" — Python API ghi nhận giờ vào, địa chỉ IP máy tính, lưu vào bảng attendance_logs.
+1.1.2. Cuối ca, nhân viên bấm "Chấm Công Ra" — Python API tính tổng số giờ làm trong ngày và cập nhật bản ghi.
+1.1.3. Tự động ghi nhận trạng thái: Đúng giờ / Đi muộn / Về sớm bằng cách so sánh giờ chấm công với ca làm việc lấy từ MySQL.
 
-### 1.2. Giới Hạn IP Chấm Công *(Điểm khác biệt)*
-1.2.1. Chỉ cho phép chấm công từ các địa chỉ IP nằm trong dải IP nội bộ của công ty (VD: `192.168.1.x`).  
-1.2.2. Khi nhân viên cố gắng chấm công từ IP bên ngoài → hệ thống từ chối và ghi log cảnh báo.  
-1.2.3. Admin có thể cấu hình danh sách IP được phép chấm công.
+### 1.2. Giới Hạn IP Chấm Công 🐍 (Điểm khác biệt)
+1.2.1. Python kiểm tra IP của request: chỉ chấp nhận IP nằm trong dải 192.168.x.x (nội bộ công ty).
+1.2.2. Nếu IP bên ngoài → API trả về lỗi 403, ghi log cảnh báo vào hệ thống.
+1.2.3. Admin có thể cấu hình whitelist IP qua trang Admin (gọi API Spring Boot để lưu cấu hình).
 
-### 1.3. Random Check — Xác Nhận Hiện Diện Ngẫu Nhiên *(Điểm khác biệt của app)*
-1.3.1. Hệ thống tự động gửi thông báo bất ngờ đến màn hình nhân viên trong khung giờ làm việc.  
-1.3.2. Nhân viên phải bấm **"Xác nhận tôi đang làm việc"** trong vòng X phút (Admin tự cấu hình).  
-1.3.3. Nếu không phản hồi trong thời gian quy định → tự động cảnh báo Manager qua Dashboard real-time.  
-1.3.4. Lịch sử các lần Random Check được lưu lại để Manager xem xét.
+### 1.3. Random Check — Xác Nhận Hiện Diện Ngẫu Nhiên 🐍 (Điểm khác biệt của app)
+1.3.1. Python dùng APScheduler lập lịch gửi thông báo bất ngờ đến màn hình nhân viên trong khung giờ làm việc (qua WebSocket).
+1.3.2. React hiển thị popup đếm ngược — nhân viên phải bấm "Xác nhận tôi đang làm việc" trong vòng X phút.
+1.3.3. Nếu không phản hồi → Python tự động cảnh báo Manager qua WebSocket, ghi nhận vào lịch sử.
+1.3.4. Lịch sử các lần Random Check (thời gian, có phản hồi hay không) được lưu lại để Manager xem xét.
 
-### 1.4. Phát Hiện & Gắn Cờ Bất Thường *(Điểm khác biệt)*
-1.4.1. Tự động gắn cờ ⚠️ các ca chấm công đáng ngờ: vào/ra cách nhau dưới 10 phút, chấm công ngoài giờ quy định.  
-1.4.2. Báo cáo danh sách các ca bất thường để Manager kiểm tra cuối ngày/tuần.
+### 1.4. Phát Hiện & Gắn Cờ Bất Thường 🐍 (Điểm khác biệt)
+1.4.1. Python tự động gắn cờ ⚠️ các ca chấm công đáng ngờ: vào/ra cách nhau dưới 10 phút, chấm công ngoài giờ quy định.
+1.4.2. Danh sách ca bất thường hiển thị trên Dashboard Manager để kiểm tra cuối ngày/tuần.
 
 ---
 
 ## Module 2: Quản Lý Nhân Sự (Human Resource Management)
 
+> ☕ **Thực thi bởi**: Spring Boot (Member 1)
+
 Tổ chức cơ cấu nhân sự, phân công công việc và quản lý thông tin nhân viên.
 
-### 2.1. Quản Lý Nhân Viên
-2.1.1. Thêm / Sửa / Xóa thông tin nhân viên (Họ tên, Mã NV, Email, Số điện thoại, Phòng ban).  
-2.1.2. Tìm kiếm và lọc nhân viên theo phòng ban, ca làm việc, trạng thái.  
-2.1.3. Mỗi nhân viên được cấp tài khoản đăng nhập riêng với vai trò (Employee / Manager / Admin).
+### 2.1. Đăng Nhập & Phân Quyền ☕
+2.1.1. Spring Boot xử lý đăng nhập, tạo JWT Token có chứa thông tin vai trò (role).
+2.1.2. 3 cấp quyền: Employee → Manager → Admin. Mỗi cấp chỉ thấy và dùng được chức năng của mình.
+2.1.3. JWT Token được React lưu vào localStorage và gửi kèm trong mọi request đến cả Spring Boot lẫn Python FastAPI.
 
-### 2.2. Quản Lý Phòng Ban
-2.2.1. Tạo / Sửa / Xóa các phòng ban trong công ty.  
-2.2.2. Gán nhân viên vào phòng ban, gán Manager phụ trách từng phòng.  
-2.2.3. Xem danh sách nhân viên theo từng phòng ban.
+### 2.2. Quản Lý Nhân Viên ☕
+2.2.1. Thêm / Sửa / Xóa thông tin nhân viên (Họ tên, Mã NV, Email, Số điện thoại, Phòng ban, Vai trò).
+2.2.2. Tìm kiếm và lọc nhân viên theo phòng ban, ca làm việc, trạng thái (đang làm / đã nghỉ).
+2.2.3. Mỗi nhân viên mới được tự động tạo tài khoản đăng nhập với mật khẩu mặc định.
 
-### 2.3. Quản Lý Ca Làm Việc
-2.3.1. Tạo các ca làm việc: Ca sáng, Ca chiều, Ca tối, Ca hành chính... với giờ bắt đầu/kết thúc cụ thể.  
-2.3.2. Phân ca cho từng nhân viên theo tuần hoặc theo tháng.  
-2.3.3. Xem lịch phân ca dưới dạng bảng (theo tuần/tháng).
+### 2.3. Quản Lý Phòng Ban ☕
+2.3.1. Tạo / Sửa / Xóa các phòng ban trong công ty.
+2.3.2. Gán nhân viên vào phòng ban, gán Manager phụ trách từng phòng.
+2.3.3. Xem danh sách nhân viên theo từng phòng ban, kèm trạng thái có mặt hôm nay.
+
+### 2.4. Quản Lý Ca Làm Việc ☕
+2.4.1. Tạo các ca làm việc: Ca sáng, Ca chiều, Ca tối, Ca hành chính... với giờ bắt đầu/kết thúc cụ thể.
+2.4.2. Phân ca cho từng nhân viên theo tuần hoặc theo tháng.
+2.4.3. Xem lịch phân ca dưới dạng bảng (theo tuần/tháng). Python sẽ đọc bảng này để tính đúng giờ / muộn.
 
 ---
 
 ## Module 3: Quản Lý Nghỉ Phép (Leave Management)
 
-Tự động hóa luồng: **Xin phép → Duyệt → Cập nhật chuyên cần**.
+> ☕ **Thực thi bởi**: Spring Boot (Member 3) — Tự động hóa luồng: Xin phép → Duyệt → Cập nhật chuyên cần.
 
-### 3.1. Xin Nghỉ Phép
-3.1.1. Nhân viên tạo đơn xin nghỉ: chọn loại nghỉ (Nghỉ phép, Nghỉ ốm, Nghỉ không lương...), ngày bắt đầu, ngày kết thúc, lý do.  
-3.1.2. Đơn được gửi tự động đến Manager phụ trách qua hệ thống thông báo real-time (WebSocket).  
-3.1.3. Nhân viên theo dõi trạng thái đơn: **Chờ duyệt / Đã duyệt / Bị từ chối**.
+### 3.1. Xin Nghỉ Phép ☕ + ⚛️
+3.1.1. Nhân viên tạo đơn xin nghỉ: chọn loại nghỉ (Nghỉ phép, Nghỉ ốm, Nghỉ không lương...), ngày bắt đầu, ngày kết thúc, lý do.
+3.1.2. Spring Boot lưu đơn, gửi thông báo đến Manager phụ trách qua WebSocket của Python (real-time).
+3.1.3. React hiển thị trạng thái đơn: Chờ duyệt / Đã duyệt / Bị từ chối.
 
-### 3.2. Duyệt Nghỉ Phép (Manager)
-3.2.1. Manager xem danh sách đơn nghỉ phép của phòng đang chờ duyệt.  
-3.2.2. Chấp thuận hoặc từ chối kèm lý do — nhân viên nhận thông báo ngay lập tức.  
-3.2.3. Khi duyệt, hệ thống tự động cập nhật số ngày phép còn lại của nhân viên đó.
+### 3.2. Duyệt Nghỉ Phép ☕ + ⚛️
+3.2.1. Manager xem danh sách đơn nghỉ phép của phòng đang chờ duyệt trên React.
+3.2.2. Chấp thuận hoặc từ chối kèm lý do — Spring Boot xử lý, nhân viên nhận thông báo ngay lập tức qua WebSocket.
+3.2.3. Khi duyệt, Spring Boot tự động trừ số ngày phép còn lại của nhân viên đó.
 
-### 3.3. Theo Dõi Ngày Phép
-3.3.1. Mỗi nhân viên được xem số ngày phép còn lại trong năm.  
-3.3.2. Admin cấu hình số ngày phép tối đa theo chính sách công ty.  
-3.3.3. Cảnh báo khi nhân viên đã dùng hết ngày phép.
+### 3.3. Theo Dõi Ngày Phép ☕
+3.3.1. Mỗi nhân viên xem số ngày phép còn lại trong năm qua giao diện React.
+3.3.2. Admin cấu hình số ngày phép tối đa theo chính sách công ty.
+3.3.3. Cảnh báo khi nhân viên đã dùng hết hoặc gần hết ngày phép.
 
 ---
 
 ## Module 4: Báo Cáo & Thống Kê (Reports & Analytics)
 
+> 🐍 + ☕ **Thực thi bởi**: Python (xuất file) + Spring Boot (API tổng hợp) — Member 2 & 3 phụ trách.
+
 Tổng hợp dữ liệu chuyên cần — đầu vào để tính lương và đánh giá hiệu suất.
 
-### 4.1. Báo Cáo Theo Ngày
-4.1.1. Danh sách nhân viên có mặt / vắng mặt / đi muộn trong ngày.  
-4.1.2. Xem chi tiết giờ vào/ra của từng người.  
-4.1.3. Dashboard real-time: hiển thị ai đang có mặt tại thời điểm hiện tại.
+### 4.1. Dashboard Real-time ⚛️ + 🐍
+4.1.1. React kết nối WebSocket của Python — hiển thị ai đang có mặt tại thời điểm hiện tại, cập nhật ngay khi có người chấm công.
+4.1.2. Dashboard cảnh báo: danh sách nhân viên không phản hồi Random Check trong ngày.
+4.1.3. Bộ lọc nhanh: xem theo phòng ban, theo ca làm việc.
 
-### 4.2. Báo Cáo Theo Tháng
-4.2.1. Tổng hợp số ngày công, số giờ làm, số lần đi muộn của từng nhân viên.  
-4.2.2. Thống kê theo phòng ban: phòng nào chuyên cần nhất.  
-4.2.3. Liệt kê các ca Random Check không được phản hồi trong tháng.
+### 4.2. Báo Cáo Theo Ngày ☕
+4.2.1. Spring Boot tổng hợp: danh sách có mặt / vắng mặt / đi muộn trong ngày từ bảng attendance_logs.
+4.2.2. Xem chi tiết giờ vào/ra của từng người, trạng thái Random Check.
+4.2.3. Lọc theo phòng ban hoặc cá nhân.
 
-### 4.3. Xuất Báo Cáo
-4.3.1. Xuất file **Excel** (.xlsx) danh sách chuyên cần theo tháng để tính lương (dùng Apache POI).  
-4.3.2. Xuất file **PDF** bảng tổng hợp ngày công.  
-4.3.3. Lọc báo cáo theo phòng ban, ca làm, khoảng thời gian tùy chọn.
+### 4.3. Báo Cáo Theo Tháng & Xuất File 🐍
+4.3.1. Python tổng hợp: số ngày công, số giờ làm, số lần đi muộn, số lần không phản hồi Random Check.
+4.3.2. Xuất file Excel (.xlsx) dùng thư viện openpyxl — để tính lương cuối tháng.
+4.3.3. Xuất file PDF dùng thư viện reportlab — bảng tổng hợp ngày công chính thức.
 
 ---
 
 ## Module 5: Hệ Thống & Bảo Mật (System & Security)
 
-Nền tảng vận hành toàn bộ hệ thống trên mạng LAN.
+> ☕ + 🐍 **Thực thi bởi**: Cả hai backend — Nền tảng vận hành toàn bộ hệ thống trên mạng LAN.
 
-### 5.1. Xác Thực & Phân Quyền
-5.1.1. Đăng nhập bằng tài khoản nội bộ — xác thực qua **JWT Token**.  
-5.1.2. 3 cấp quyền: **Employee** (chấm công, xem cá nhân) → **Manager** (quản lý phòng, duyệt phép) → **Admin** (toàn quyền).  
-5.1.3. Token hết hạn sau thời gian quy định, yêu cầu đăng nhập lại.
+### 5.1. Bảo Mật JWT Dùng Chung ☕ + 🐍 (Quan trọng)
+5.1.1. Spring Boot tạo JWT Token khi đăng nhập, ký bằng secret key chung.
+5.1.2. Python FastAPI xác minh JWT Token từ React bằng cùng secret key đó trước khi xử lý mọi request.
+5.1.3. Token hết hạn sau thời gian quy định, React tự động redirect về trang đăng nhập.
 
-### 5.2. Triển Khai Trên Mạng LAN *(Điểm khác biệt)*
-5.2.1. **1 máy chủ duy nhất** trong công ty chạy Spring Boot (cổng 8080) + MySQL.  
-5.2.2. Toàn bộ nhân viên truy cập qua trình duyệt bằng IP nội bộ (VD: `http://192.168.1.100:8080`).  
-5.2.3. **Không cần Internet, không phụ thuộc dịch vụ bên ngoài** — dữ liệu hoàn toàn nội bộ.
+### 5.2. Triển Khai Microservices Trên Mạng LAN 🐍 + ☕ (Điểm khác biệt)
+5.2.1. 1 máy chủ duy nhất chạy đồng thời: Spring Boot (cổng 8080) + Python FastAPI (cổng 8000) + MySQL.
+5.2.2. Toàn bộ nhân viên truy cập React qua IP nội bộ — không cần cài đặt gì trên máy client.
+5.2.3. Không cần Internet, không phụ thuộc dịch vụ bên ngoài — dữ liệu hoàn toàn nội bộ.
+5.2.4. File start_server.bat tự động khởi động toàn bộ hệ thống chỉ bằng 1 cú double-click.
 
-### 5.3. Thông Báo Real-time (WebSocket)
-5.3.1. Khi nhân viên chấm công → Dashboard Manager cập nhật ngay không cần F5.  
-5.3.2. Khi có đơn nghỉ phép mới → Manager nhận thông báo tức thì.  
-5.3.3. Khi Random Check được kích hoạt → Popup hiện trên màn hình nhân viên ngay lập tức.
+### 5.3. WebSocket Real-time 🐍
+5.3.1. Python FastAPI quản lý toàn bộ kênh WebSocket — broadcast khi có chấm công mới, khi Random Check kích hoạt, khi có đơn nghỉ phép.
+5.3.2. Dashboard Manager cập nhật tức thì, không cần F5 trang.
+5.3.3. Popup Random Check hiện trên màn hình nhân viên ngay lập tức khi Python gửi lệnh.
 
-### 5.4. Nhật Ký Hệ Thống (Audit Log)
-5.4.1. Ghi lại toàn bộ hoạt động quan trọng: đăng nhập, chấm công, duyệt đơn, thay đổi cài đặt.  
-5.4.2. Admin xem nhật ký để kiểm tra bảo mật và truy vết sự cố.  
-5.4.3. Cảnh báo khi phát hiện đăng nhập từ IP lạ hoặc ngoài giờ hành chính.
+### 5.4. Nhật Ký Hệ Thống (Audit Log) ☕
+5.4.1. Spring Boot ghi lại toàn bộ hoạt động quan trọng: đăng nhập, thay đổi nhân sự, duyệt đơn.
+5.4.2. Python ghi riêng log chấm công và Random Check.
+5.4.3. Admin xem nhật ký hợp nhất để kiểm tra bảo mật và truy vết sự cố.
 
 ---
 
 ## Tóm Tắt — Ma Trận Module
 
-| Module | Chức năng chính | Điểm độc đáo |
-|--------|----------------|-------------|
-| **Module 1** — Chấm Công | Vào/Ra, tự động nhận diện muộn/sớm | 🌟 Giới hạn IP, Random Check, Gắn cờ bất thường |
-| **Module 2** — Nhân Sự | CRUD nhân viên, phòng ban, ca làm | ➖ Học từ HRM thương mại |
-| **Module 3** — Nghỉ Phép | Xin phép → Duyệt → Cập nhật tự động | 🌟 Thông báo real-time qua WebSocket |
-| **Module 4** — Báo Cáo | Thống kê ngày công, xuất Excel/PDF | 🌟 Báo cáo Random Check không phản hồi |
-| **Module 5** — Hệ Thống | JWT, phân quyền, audit log | 🌟 Chạy hoàn toàn trên LAN, không Internet |
+| Module | Công nghệ | Thành viên | Điểm độc đáo |
+|--------|-----------|-----------|-------------|
+| **Module 1** — Chấm Công | 🐍 Python FastAPI | Member 2 | 🌟 Giới hạn IP, Random Check, Gắn cờ bất thường |
+| **Module 2** — Nhân Sự | ☕ Spring Boot | Member 1 | ➖ Học từ HRM thương mại, nền tảng bảo mật tốt |
+| **Module 3** — Nghỉ Phép | ☕ Spring Boot | Member 3 | 🌟 Thông báo real-time qua WebSocket Python |
+| **Module 4** — Báo Cáo | 🐍 Python + ☕ Java | Member 2 & 3 | 🌟 Báo cáo Random Check, xuất Excel/PDF bằng Python |
+| **Module 5** — Hệ Thống | 🐍 + ☕ Cả hai | Member 1,2,3 | 🌟 Microservices LAN, JWT chung, start_server.bat |
