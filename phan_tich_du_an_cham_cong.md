@@ -102,32 +102,28 @@ Phần mềm chấm công LAN là hệ thống **Client-Server** chạy trong m�
 
 ---
 
-## 4. 📊 Ma Trận So Sánh Chức Năng
+## 4. 📊 Ma Trận So Sánh & Đánh Giá Tính Mới
 
-> **Giải thích**: So sánh với các phần mềm chấm công phổ biến: **HanetAI**, **TimekeepingPro**, **Misa HRM**, **Google Sheets thủ công**
+> **Mục tiêu**: Đánh giá sự khác biệt của "Hệ Thống Chấm Công LAN" (dự án nhóm) so với các giải pháp hiện có trên thị trường.
 
-| Chức năng | Phần mềm thương mại có | Phần mềm của mình có | Tính mới / Độc đáo |
-|-----------|:---------------------:|:-------------------:|:-------------------:|
-| **Chấm công vào/ra** | ✅ | ✅ | ➖ Học từ các phần mềm khác |
-| **Quản lý nhân viên** | ✅ | ✅ | ➖ Học từ các phần mềm khác |
-| **Quản lý ca làm việc** | ✅ | ✅ | ➖ Học từ các phần mềm khác |
-| **Xin/Duyệt nghỉ phép** | ✅ | ✅ | ➖ Học từ các phần mềm khác |
-| **Báo cáo tháng / xuất Excel** | ✅ | ✅ | ➖ Học từ các phần mềm khác |
-| **Dashboard real-time** | ✅ (một số) | ✅ | ➖ Học từ một số phần mềm |
-| **Chạy hoàn toàn trên LAN nội bộ (không cần Internet)** | ❌ (hầu hết cần cloud) | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Tự động phát hiện Server trong LAN (Auto-discovery)** | ❌ | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Broadcast thông báo real-time qua WebSocket** | ❌ | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Xử lý đa luồng (Multithread Server)** | ❌ (ẩn bên trong) | ✅ (tường minh) | 🌟 **HỌC TẬP & TRÌNH BÀY** |
-| **Không phụ thuộc thiết bị phần cứng (vân tay, thẻ từ)** | ❌ (thường cần HW) | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Chi phí bằng 0 (open source / tự phát triển)** | ❌ (trả phí) | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Giới hạn IP chấm công (chỉ trong LAN)** | ❌ | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Random Check — xác nhận hiện diện ngẫu nhiên** | ❌ (rất hiếm) | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Cảnh báo Manager khi nhân viên không phản hồi** | ❌ | ✅ | 🌟 **ĐỘC ĐÁO** |
-| **Tự động gắn cờ chấm công bất thường** | ⚠️ (một số HRM đắt tiền) | ✅ | 🌟 **ĐỘC ĐÁO** |
+| Tiêu chí / Chức năng | Máy Vân Tay Thủ Công | Cloud HRM (Misa, Base) | 🌟 LAN System (Dự án của nhóm) |
+|----------------------|:--------------------:|:----------------------:|:------------------------------:|
+| **Môi trường hoạt động** | Offline hoàn toàn | Bắt buộc có Internet | **Mạng nội bộ (LAN)** - Không cần Internet |
+| **Yêu cầu phần cứng** | Máy quẹt vân tay / thẻ từ | Laptop / Smartphone | **Chỉ cần Laptop / PC có sẵn** |
+| **Chi phí triển khai** | Cao (mua máy móc) | Trả phí hàng tháng | **0đ (Triển khai nội bộ)** |
+| **Đồng bộ thời gian thực**| ❌ (Thường phải trút dữ liệu cuối tháng) | ✅ (Đồng bộ qua cloud) | ✅ **(Real-time qua WebSocket)** |
+| **Chống gian lận: IP** | ➖ (Cố định tại máy) | ❌ (Có thể fake GPS/IP) | ✅ **(Chỉ nhận IP nội bộ công ty)** |
+| **Chống gian lận: Random Check**| ❌ | ❌ (Rất hiếm phần mềm có) | ✅ **(Kích hoạt ngẫu nhiên bằng Python AI)** |
+| **Gắn cờ bất thường tự động**| ❌ | ⚠️ (Chỉ ở bản cao cấp) | ✅ **(Thuật toán Data Analysis Python)** |
+| **Kiến trúc hệ thống** | Standalone | Monolithic / Microservices trên Cloud | **Hybrid Microservices trong mạng LAN (Spring Boot + Python)** |
+| **Bảo mật dữ liệu** | An toàn (lưu trên máy) | Rủi ro rò rỉ (lưu máy chủ bên thứ 3) | **Cực kỳ an toàn (Dữ liệu không bao giờ ra khỏi công ty)** |
 
-### Tóm tắt ma trận:
-- **Chức năng học từ phần mềm khác**: Chấm công, quản lý nhân sự, ca làm, nghỉ phép, báo cáo
-- **Chức năng mới / độc đáo**: Hoàn toàn LAN, auto-discovery server, broadcast WebSocket real-time, không cần phần cứng, miễn phí, **giới hạn IP**, **Random Check chống gian lận**, **cảnh báo Manager**, **gắn cờ bất thường**
+### 🎯 Đánh Giá Tính Mới (Điểm Khác Biệt Của Dự Án):
+
+1. **Kiến trúc Microservices trên LAN**: Việc triển khai Microservices (Java + Python) thường thấy trên Cloud, nhưng dự án áp dụng ngay trong môi trường mạng LAN nội bộ, giúp tận dụng tối đa thế mạnh của từng ngôn ngữ (Java xử lý lõi, Python phân tích dữ liệu).
+2. **Cơ chế chống gian lận chủ động (Random Check)**: Khắc phục nhược điểm của máy vân tay (chấm hộ) và Cloud HRM (fake vị trí) bằng cách yêu cầu xác nhận ngẫu nhiên ngay tại màn hình làm việc trong giờ hành chính.
+3. **Bảo mật dữ liệu tuyệt đối**: Các doanh nghiệp vừa và nhỏ thường e ngại đưa dữ liệu nhân sự lên Cloud. Hệ thống của nhóm giải quyết bài toán này bằng cách chạy hoàn toàn offline trên LAN mà vẫn giữ được tính năng hiện đại (Dashboard real-time).
+4. **Không chi phí phần cứng**: Biến mọi máy tính trong mạng LAN thành "máy chấm công", giảm thiểu hoàn toàn chi phí mua sắm và bảo trì thiết bị đọc vân tay.
 
 ---
 
@@ -145,24 +141,17 @@ Phần mềm chấm công LAN là hệ thống **Client-Server** chạy trong m�
                    │          ┌───────────────────┘
                    │   HTTP REST API / WebSocket
                    │
-          ┌────────▼──────────────────┐
-          │   💻 MÁY CHỦ NỘI BỘ      │
-          │   Spring Boot (port 8080) │
-          │   IP: 192.168.1.100       │
-          │   - REST API Controller   │
-          │   - WebSocket Handler     │
-          │   - JWT Auth              │
-          │   - Random Check Engine   │
-          └────────┬──────────────────┘
-                   │  JPA / Hibernate
-          ┌────────▼──────────────────┐
-          │   🗄️ MySQL Database       │
-          │   - employees             │
-          │   - attendance_logs       │
-          │   - departments           │
-          │   - shifts                │
-          │   - leave_requests        │
-          └───────────────────────────┘
+          ┌────────▼──────────────┬───────────────────┐
+          │ ☕ Spring Boot :8080  │  🐍 Python  :8000 │
+          │ - JWT / Phân quyền    │  - Chấm công vào/ra│
+          │ - Quản lý nhân sự     │  - WebSocket RT    │
+          │ - Ca làm / Nghỉ phép  │  - Random Check    │
+          └────────┬──────────────┴─────────┬──────────┘
+                   └────────────┬────────────┘
+                                │ JPA / SQLAlchemy
+                       ┌────────▼──────────┐
+                       │   🗄️ MySQL DB     │
+                       └───────────────────┘
 
   ❌ Không có kết nối ra ngoài Internet
 ```
@@ -174,79 +163,112 @@ Phần mềm chấm công LAN là hệ thống **Client-Server** chạy trong m�
 | Tầng | Công nghệ | Mục đích |
 |------|-----------|----------|
 | **Frontend** | React + Axios + SockJS | Giao diện người dùng, gọi API, nhận WebSocket |
-| **Backend** | Spring Boot 3.x (Java) | REST API, xử lý logic nghiệp vụ |
-| **Real-time** | Spring WebSocket + STOMP | Broadcast chấm công, Random Check, cảnh báo |
-| **Bảo mật** | Spring Security + JWT | Đăng nhập, phân quyền theo vai trò |
-| **Database** | MySQL 8 + JPA/Hibernate | Lưu trữ toàn bộ dữ liệu |
-| **Build tool** | Maven (Backend) + Vite (Frontend) | Quản lý dependencies |
-| **API Style** | RESTful API | Giao tiếp Frontend ↔ Backend |
+| **Core Backend (Java)** | Spring Boot 3.x + Spring Security + JWT | Bảo mật, nhân sự, ca làm, nghỉ phép |
+| **Data/RT Backend (Python)** | FastAPI + APScheduler + openpyxl | Chấm công, Real-time WebSocket, Random Check, xuất báo cáo |
+| **Database** | MySQL 8 + JPA (Java) / SQLAlchemy (Python) | Lưu trữ toàn bộ dữ liệu (dùng chung 1 DB) |
+| **Build tool** | Maven (Java) + Vite (React) + pip (Python) | Quản lý dependencies |
+| **API Style** | RESTful API + WebSocket | Giao tiếp Frontend ↔ 2 Backend |
 
-### Lý do chọn Stack này:
-- ✅ Cả nhóm đều có kinh nghiệm Spring Boot + React
-- ✅ Spring Boot tích hợp WebSocket rất dễ (real-time)
-- ✅ Deploy LAN đơn giản: chạy `.jar` trên 1 máy là xong
-- ✅ React chạy trên browser, nhân viên không cần cài gì
+### Lý do chọn kiến trúc Microservices (Spring Boot + Python):
+- ✅ **Java (Spring Boot)**: Mạnh về bảo mật, transaction, quản lý cấu trúc tổ chức phức tạp
+- ✅ **Python (FastAPI)**: Mạnh về xử lý real-time, thuật toán, xuất báo cáo
+- ✅ **React**: Giao diện mượt, kết nối được cả 2 backend
+- ✅ **Deploy LAN**: Chạy 2 server trên 1 máy, không cần Internet
 
 ---
 
-## 7. 👨‍💻 Phân Công 5 Thành Viên
+
+
+> Mỗi thành viên đảm nhận đúng **5–6 nhiệm vụ** — không ai ít hơn hay nhiều hơn.
 
 ### Tổng quan phân công:
 
-| Thành viên | Vai trò | Mảng chính |
-|---|---|---|
-| **Member 1** | Backend Lead | API chấm công + chống gian lận + WebSocket |
-| **Member 2** | Backend Dev | API nhân sự + ca làm + nghỉ phép |
-| **Member 3** | Frontend Lead | Giao diện nhân viên + trang chấm công |
-| **Member 4** | Frontend Dev | Giao diện Admin + Manager + Dashboard |
-| **Member 5** | Database + Tích hợp | Thiết kế DB + Deploy LAN + kết nối FE-BE |
+| Thành viên | Ngôn ngữ | Mảng phụ trách | Số nhiệm vụ |
+|---|---|---|:---:|
+| **Member 1** | Spring Boot | Bảo mật + Nhân viên + Phòng ban + Ca làm việc | 5 |
+| **Member 2** | Python FastAPI | Chấm công + IP filter + WebSocket + Random Check + Gắn cờ | 5 |
+| **Member 3** | Spring Boot + DevOps | Nghỉ phép + Báo cáo + ERD + Deploy LAN | 6 |
+| **Member 4** | React | Trang nhân viên: Login, chấm công, popup, lịch sử, xin nghỉ | 6 |
+| **Member 5** | React | Trang quản lý: Dashboard, Admin, duyệt nghỉ, báo cáo, biểu đồ | 5 |
 
 ---
 
 ### Chi tiết nhiệm vụ từng người:
 
-#### 👤 Member 1 — Backend Lead (Spring Boot)
+#### 👤 Member 1 — Backend Java (Spring Boot) — Bảo Mật & Nhân Sự
+1. API **Đăng nhập** / JWT / Spring Security
+2. **Phân quyền** 3 cấp: Employee → Manager → Admin
+3. API **Quản lý nhân viên** (Thêm / Sửa / Xóa / Tìm kiếm)
+4. API **Quản lý phòng ban** (CRUD + gán Manager phụ trách)
+5. API **Quản lý ca làm việc** (CRUD) + Phân ca cho nhân viên theo tuần/tháng
+
+#### 👤 Member 2 — Backend Python (FastAPI) — Chấm Công & Real-time
+1. API **Chấm công vào/ra** + Tự động nhận trạng thái Đúng giờ / Đi muộn / Về sớm
+2. **Kiểm tra IP**: chỉ chấp nhận chấm công từ IP nội bộ công ty
+3. **WebSocket**: broadcast real-time ai đang có mặt lên Dashboard Manager
+4. Engine **Random Check**: dùng APScheduler gửi thông báo ngẫu nhiên + xử lý phản hồi
+5. Thuật toán **gắn cờ ⚠️ bất thường** (vào/ra cách nhau dưới 10 phút, ngoài giờ)
+
+#### 👤 Member 3 — Spring Boot + DevOps — Nghỉ Phép & Báo Cáo & Deploy
+1. API **Xin nghỉ phép** (tạo đơn, theo dõi trạng thái) + **Duyệt nghỉ phép** (Manager)
+2. API **Báo cáo** ngày công theo ngày / tháng + Xuất **Excel** (Apache POI)
+3. Thiết kế **ERD** + Viết script **SQL** tạo bảng + dữ liệu mẫu
+4. Cấu hình **CORS** để React gọi được cả Spring Boot (8080) và Python (8000)
+5. Viết **`start_server.bat`**: tự động bật MySQL + Java + Python 1 cú click
+6. **Hướng dẫn deploy LAN**: cài đặt + cho các máy khác truy cập qua IP
+
+#### 👤 Member 4 — Frontend Lead (React) — Giao Diện Nhân Viên
+1. Setup project **React + Vite**, cấu hình **Axios** gọi được cả 2 backend
+2. Trang **Đăng nhập** (gọi Spring Boot, lưu JWT vào localStorage)
+3. Trang **Chấm Công**: nút Vào/Ra + Đồng hồ giờ thực (gọi FastAPI)
+4. Kết nối **WebSocket** + Popup **Random Check** (đếm ngược X phút, nút xác nhận)
+5. Trang **Lịch sử chấm công** cá nhân (xem theo ngày/tháng)
+6. Trang **Xin nghỉ phép** (tạo đơn, xem trạng thái)
+
+#### 👤 Member 5 — Frontend Dev (React) — Dashboard & Quản Lý
+1. **Layout** tổng thể: Sidebar, Navbar, Route bảo vệ theo vai trò
+2. **Dashboard Manager**: ai đang có mặt (nhận real-time từ WebSocket Python)
+3. Dashboard **cảnh báo**: nhân viên không phản hồi Random Check
+4. Trang **Admin**: quản lý nhân viên, phòng ban, ca làm (gọi Spring Boot)
+5. Trang **Duyệt nghỉ phép** (Manager) + Trang **Báo cáo** + Nút xuất Excel/PDF + **Biểu đồ** ngày côngật
 - [ ] Cài đặt project Spring Boot, cấu hình Maven, kết nối MySQL
-- [ ] API Đăng nhập / JWT / Spring Security / Phân quyền
-- [ ] API Chấm công vào/ra, lịch sử chấm công
-- [ ] Logic giới hạn IP chấm công (filter theo IP nội bộ)
-- [ ] Tích hợp WebSocket: broadcast trạng thái real-time
-- [ ] Engine **Random Check**: lập lịch gửi thông báo ngẫu nhiên + xử lý phản hồi
-- [ ] Logic gắn cờ ⚠️ chấm công bất thường
+- [ ] API **Đăng nhập / JWT / Spring Security** / Phân quyền 3 cấp (Employee, Manager, Admin)
+- [ ] API **Quản lý nhân viên** (CRUD) + Quản lý phòng ban
+- [ ] API **Quản lý ca làm việc** (CRUD) + phân ca theo tuần/tháng
+- [ ] API **Xin nghỉ phép** (tạo đơn) + **Duyệt nghỉ phép** (Manager chấp thuận/từ chối)
+- [ ] Logic theo dõi số ngày phép còn lại của từng nhân viên
 
-#### 👤 Member 2 — Backend Dev (Spring Boot)
-- [ ] API Quản lý nhân viên (CRUD)
-- [ ] API Quản lý phòng ban (CRUD)
-- [ ] API Quản lý ca làm việc (CRUD) + phân ca
-- [ ] API Xin nghỉ phép + duyệt nghỉ phép
-- [ ] API Báo cáo: theo ngày, theo tháng
-- [ ] Xuất file Excel (dùng Apache POI)
+#### 👤 Member 2 — Backend Python (FastAPI) — Phụ trách Chấm Công & Real-time
+- [ ] Cài đặt project FastAPI, cấu hình SQLAlchemy kết nối MySQL
+- [ ] API **Chấm công vào/ra**: ghi nhận giờ, kiểm tra IP nội bộ
+- [ ] **WebSocket**: broadcast real-time trạng thái ai đang có mặt lên Dashboard
+- [ ] Engine **Random Check**: dùng APScheduler gửi thông báo ngẫu nhiên + xử lý phản hồi
+- [ ] Thuật toán **gắn cờ bất thường** (vào/ra quá nhanh, ngoài giờ)
+- [ ] Xuất báo cáo **Excel** (openpyxl) và **PDF** (reportlab) ngày công theo tháng
 
-#### 👤 Member 3 — Frontend Lead (React)
-- [ ] Cài đặt project React + Vite, cấu hình Axios
-- [ ] Trang Đăng nhập (JWT lưu localStorage)
-- [ ] Trang Chấm Công: nút Vào/Ra, hiển thị giờ thực
-- [ ] Kết nối WebSocket nhận thông báo Real-time
-- [ ] Popup **Random Check**: đếm ngược X phút, nút xác nhận
-- [ ] Trang Lịch sử chấm công cá nhân
-- [ ] Trang Xin nghỉ phép
+#### 👤 Member 3 — Database + DevOps + Tích hợp
+- [ ] Thiết kế sơ đồ **ERD** đầy đủ (dùng chung 1 MySQL cho cả Java và Python)
+- [ ] Viết script **SQL** tạo bảng + dữ liệu mẫu
+- [ ] Cấu hình **CORS** để React gọi được cả 2 backend (Java port 8080, Python port 8000)
+- [ ] Viết **REST call** từ Spring Boot → FastAPI khi cần lấy dữ liệu chấm công
+- [ ] Viết file **`start_server.bat`**: tự động bật MySQL + Java Server + Python Server cùng lúc
+- [ ] **Hướng dẫn deploy LAN**: các máy khác truy cập qua IP
 
-#### 👤 Member 4 — Frontend Dev (React)
-- [ ] Layout tổng thể: Sidebar, Navbar, Route bảo vệ
-- [ ] **Dashboard Manager**: danh sách ai đang có mặt (real-time)
-- [ ] Dashboard cảnh báo: nhân viên không phản hồi Random Check
-- [ ] Trang Admin: quản lý nhân viên, phòng ban, ca làm
-- [ ] Trang Duyệt nghỉ phép (Manager)
-- [ ] Trang Báo cáo + nút xuất Excel
+#### 👤 Member 4 — Frontend Lead (React) — Giao Diện Nhân Viên
+- [ ] Cài đặt project React + Vite, cấu hình **Axios** gọi được cả 2 API (port 8080 và 8000)
+- [ ] Trang **Đăng nhập** (JWT lưu localStorage, gọi Spring Boot)
+- [ ] Trang **Chấm Công**: nút Vào/Ra, hiển thị giờ thực (gọi FastAPI)
+- [ ] Kết nối **WebSocket** nhận thông báo từ Python real-time
+- [ ] Popup **Random Check**: đếm ngược X phút, nút xác nhận hiện diện
+- [ ] Trang **Lịch sử chấm công** cá nhân + Trang **Xin nghỉ phép**
 
-#### 👤 Member 5 — Database + DevOps + Tích hợp
-- [ ] Thiết kế sơ đồ ERD đầy đủ
-- [ ] Viết script SQL tạo bảng + dữ liệu mẫu
-- [ ] Cấu hình `application.properties` (Spring Boot ↔ MySQL)
-- [ ] Hỗ trợ kết nối Frontend ↔ Backend (CORS, API URL)
-- [ ] **Deploy trên LAN**: cài MySQL + chạy `.jar` trên máy chủ
-- [ ] Hướng dẫn các máy khác truy cập qua IP
-- [ ] Viết tài liệu hướng dẫn sử dụng
+#### 👤 Member 5 — Frontend Dev (React) — Dashboard & Admin
+- [ ] Layout tổng thể: **Sidebar, Navbar, Route bảo vệ** theo vai trò
+- [ ] **Dashboard Manager**: danh sách ai đang có mặt (real-time từ WebSocket Python)
+- [ ] Dashboard **cảnh báo**: nhân viên không phản hồi Random Check
+- [ ] Trang **Admin**: quản lý nhân viên, phòng ban, ca làm (gọi Spring Boot)
+- [ ] Trang **Duyệt nghỉ phép** (Manager) + Trang **Báo cáo**
+- [ ] Nút **Xuất Excel/PDF** (gọi FastAPI Python) + Hiển thị **biểu đồ** ngày công
 
 ---
 
@@ -268,7 +290,7 @@ Phần mềm chấm công LAN là hệ thống **Client-Server** chạy trong m�
 - [ ] Slide giới thiệu tổng quan dự án
 - [ ] Trình bày danh sách đối tượng + sơ đồ phân cấp
 - [ ] Trình bày bảng chức năng dự kiến (7 nhóm)
-- [ ] Trình bày ma trận so sánh (highlight 10 điểm độc đáo)
-- [ ] Giải thích kiến trúc LAN: Spring Boot + React + MySQL
-- [ ] Trình bày phân công 5 thành viên
+- [ ] Trình bày ma trận so sánh (Máy vân tay / Cloud HRM / LAN System)
+- [ ] Giải thích kiến trúc Microservices LAN: Spring Boot + Python + React
+- [ ] Trình bày phân công 5 thành viên (cân bằng Java ↔ Python)
 - [ ] Trình bày lịch tiến độ 6 tuần
