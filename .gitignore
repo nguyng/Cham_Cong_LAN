@@ -1,0 +1,44 @@
+# ========================
+# Spring Boot (Backend)
+# ========================
+target/
+*.jar
+*.war
+*.class
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+spring-boot-*.log
+
+# ========================
+# React / Node (Frontend)
+# ========================
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.production
+
+# ========================
+# IDE & Editor
+# ========================
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ========================
+# Database & Sensitive
+# ========================
+*.sql.backup
+application-prod.properties
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
