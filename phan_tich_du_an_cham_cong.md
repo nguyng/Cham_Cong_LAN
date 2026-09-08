@@ -294,3 +294,76 @@ Phần mềm chấm công LAN là hệ thống **Client-Server** chạy trong m�
 - [ ] Giải thích kiến trúc Microservices LAN: Spring Boot + Python + React
 - [ ] Trình bày phân công 5 thành viên (cân bằng Java ↔ Python)
 - [ ] Trình bày lịch tiến độ 6 tuần
+
+---
+
+## 9. ⚠️ Lưu Ý Khi Deploy
+
+> Đây là các điểm **BẮT BUỘC** phải thống nhất trong nhóm ngay từ **Tuần 1**, nếu không hệ thống sẽ không kết nối được với nhau khi deploy trên LAN.
+
+### 🔑 Lưu ý 1: JWT Secret Key phải dùng CHUNG giữa Java và Python
+
+Khi nhân viên đăng nhập qua **Spring Boot**, token JWT được tạo ra. Token này sau đó được React gửi sang **Python FastAPI** để xác thực. Nếu 2 backend dùng khác secret key thì Python sẽ từ chối mọi yêu cầu.
+
+```
+❌ SAI: Java dùng secret "java_secret_123", Python dùng secret "python_secret_456"
+✅ ĐÚNG: Cả 2 cùng dùng secret "CHAM_CONG_LAN_SECRET_KEY_2025"
+```
+**Ai chịu trách nhiệm**: Member 1 (Java) và Member 2 (Python) thống nhất secret key, Member 3 lưu vào file `.env` chung.
+
+---
+
+### 🌐 Lưu ý 2: CORS phải cấu hình đúng cho CẢ HAI backend
+
+React chạy trên một cổng, 2 backend chạy trên 2 cổng khác. Trình duyệt sẽ chặn mọi request nếu CORS không được cấu hình.
+
+```
+React chạy tại:        http://192.168.1.100:5173
+
+Spring Boot phải cho phép:  origins = "http://192.168.1.100:5173"
+Python FastAPI phải cho phép: origins = "http://192.168.1.100:5173"
+```
+**Ai chịu trách nhiệm**: Member 3 cấu hình CORS cho cả 2 backend.
+
+---
+
+### 📁 Lưu ý 3: Thống nhất tên bảng trong MySQL từ đầu
+
+Cả Java (JPA) và Python (SQLAlchemy) cùng đọc/ghi vào **1 database MySQL duy nhất**. Nếu tên bảng hoặc tên cột khác nhau, dữ liệu sẽ bị lỗi.
+
+```
+✅ Ví dụ thống nhất:
+  Bảng nhân viên:     employees       (Java tạo, Python chỉ đọc)
+  Bảng chấm công:     attendance_logs (Python tạo, Java chỉ đọc)
+  Bảng ca làm:        shifts          (Java tạo và quản lý)
+```
+**Ai chịu trách nhiệm**: Member 3 thiết kế ERD, cả nhóm duyệt trước khi ai bắt đầu code.
+
+---
+
+### 🗂️ Lưu ý 4: React cần file `.env` với đúng địa chỉ IP
+
+Khi deploy trên máy chủ LAN, IP của máy chủ là cố định. React cần biết địa chỉ này để gọi đúng backend.
+
+```env
+# File .env trong project React
+VITE_JAVA_API_URL=http://192.168.1.100:8080
+VITE_PYTHON_API_URL=http://192.168.1.100:8000
+```
+**Ai chịu trách nhiệm**: Member 3 tạo file `.env.example` mẫu, Member 4 và 5 dùng theo.
+
+---
+
+### 🖥️ Lưu ý 5: Thứ tự khởi động khi Demo
+
+Khi demo trước thầy, phải khởi động đúng thứ tự, nếu không React sẽ báo lỗi kết nối:
+
+```
+Bước 1: Khởi động MySQL (database phải chạy trước)
+Bước 2: Khởi động Spring Boot  → chờ thấy "Started Application"
+Bước 3: Khởi động Python FastAPI → chờ thấy "Uvicorn running"
+Bước 4: Khởi động React (npm run dev hoặc mở file build)
+Bước 5: Các máy khác mở browser → gõ IP máy chủ
+```
+
+> 💡 **Mẹo**: Member 3 viết file `start_server.bat` tự động hóa 4 bước đầu, khi demo chỉ cần **double-click 1 file** là xong!
