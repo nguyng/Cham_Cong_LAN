@@ -1,0 +1,120 @@
+PHAN MEM CHAM CONG TREN MANG LAN
+Mo Ta Cac Module Chuc Nang
+
+Mon hoc: Lap Trinh Mang
+Kien truc: Microservices - Spring Boot (Java) + Python FastAPI + React
+Moi truong: Mang noi bo LAN (khong can Internet)
+
+Module 1: Cham Cong (Attendance)
+[Python FastAPI - Member 2 phu trach]
+Trung tam cua he thong - ghi nhan toan bo hoat dong vao/ra cua nhan vien theo thoi gian thuc.
+1.1. Cham Cong Vao / Ra [Python]
+1.1.1. Nhan vien dang nhap va bam nut Cham Cong Vao - Python API ghi nhan gio vao, dia chi IP may tinh, luu vao bang attendance_logs.
+1.1.2. Cuoi ca, nhan vien bam Cham Cong Ra - Python API tinh tong so gio lam trong ngay va cap nhat ban ghi.
+1.1.3. Tu dong ghi nhan trang thai: Dung gio / Di muon / Ve som dua tren ca lam viec da phan cong.
+1.2. Gioi Han IP Cham Cong [Python] - Diem khac biet
+1.2.1. Python kiem tra IP cua request: chi chap nhan IP nam trong dai 192.168.x.x (noi bo cong ty).
+1.2.2. Neu IP ben ngoai -> API tra ve loi 403, ghi log canh bao vao he thong.
+1.2.3. Admin co the cau hinh whitelist IP qua trang Admin (goi API Spring Boot de luu cau hinh).
+1.3. Random Check - Xac Nhan Hien Dien Ngau Nhien [Python] - Diem khac biet cua app
+1.3.1. Python dung APScheduler lap lich gui thong bao bat ngo den man hinh nhan vien trong khung gio lam viec (qua WebSocket).
+1.3.2. React hien thi popup dem nguoc - nhan vien phai bam Xac nhan toi dang lam viec trong vong X phut.
+1.3.3. Neu khong phan hoi -> Python tu dong canh bao Manager qua WebSocket, ghi nhan vao lich su.
+1.3.4. Lich su cac lan Random Check (thoi gian, co phan hoi hay khong) duoc luu lai de Manager xem xet.
+1.4. Phat Hien & Gan Co Bat Thuong [Python] - Diem khac biet
+1.4.1. Python tu dong gan co bat thuong cac ca cham cong dang ngo: vao/ra cach nhau duoi 10 phut, cham cong ngoai gio quy dinh.
+1.4.2. Danh sach ca bat thuong hien thi tren Dashboard Manager de kiem tra cuoi ngay/tuan.
+Module 2: Quan Ly Nhan Su (Human Resource Management)
+[Spring Boot Java - Member 1 phu trach]
+To chuc co cau nhan su, phan cong cong viec va quan ly thong tin nhan vien.
+2.1. Dang Nhap & Phan Quyen [Java]
+2.1.1. Spring Boot xu ly dang nhap, tao JWT Token co chua thong tin vai tro (role).
+2.1.2. 3 cap quyen: Employee -> Manager -> Admin. Moi cap chi thay va dung duoc chuc nang cua minh.
+2.1.3. JWT Token duoc React luu vao localStorage va gui kem trong moi request den ca Spring Boot lan Python FastAPI.
+2.2. Quan Ly Nhan Vien [Java]
+2.2.1. Them / Sua / Xoa thong tin nhan vien (Ho ten, Ma NV, Email, So dien thoai, Phong ban, Vai tro).
+2.2.2. Tim kiem va loc nhan vien theo phong ban, ca lam viec, trang thai.
+2.2.3. Moi nhan vien moi duoc tu dong tao tai khoan dang nhap voi mat khau mac dinh.
+2.3. Quan Ly Phong Ban [Java]
+2.3.1. Tao / Sua / Xoa cac phong ban trong cong ty.
+2.3.2. Gan nhan vien vao phong ban, gan Manager phu trach tung phong.
+2.3.3. Xem danh sach nhan vien theo tung phong ban, kem trang thai co mat hom nay.
+2.4. Quan Ly Ca Lam Viec [Java]
+2.4.1. Tao cac ca lam viec: Ca sang, Ca chieu, Ca toi, Ca hanh chinh... voi gio bat dau/ket thuc cu the.
+2.4.2. Phan ca cho tung nhan vien theo tuan hoac theo thang.
+2.4.3. Xem lich phan ca duoi dang bang. Python se doc bang nay de tinh dung gio / muon.
+Module 3: Quan Ly Nghi Phep (Leave Management)
+[Spring Boot Java - Member 3 phu trach]
+Tu dong hoa luong: Xin phep -> Duyet -> Cap nhat chuyen can.
+3.1. Xin Nghi Phep [Java + React]
+3.1.1. Nhan vien tao don xin nghi: chon loai nghi, ngay bat dau, ngay ket thuc, ly do.
+3.1.2. Spring Boot luu don, gui thong bao den Manager qua WebSocket cua Python (real-time).
+3.1.3. React hien thi trang thai don: Cho duyet / Da duyet / Bi tu choi.
+3.2. Duyet Nghi Phep [Java + React]
+3.2.1. Manager xem danh sach don nghi phep cua phong dang cho duyet tren React.
+3.2.2. Chap thuan hoac tu choi kem ly do - nhan vien nhan thong bao ngay lap tuc qua WebSocket.
+3.2.3. Khi duyet, Spring Boot tu dong tru so ngay phep con lai cua nhan vien do.
+3.3. Theo Doi Ngay Phep [Java]
+3.3.1. Moi nhan vien xem so ngay phep con lai trong nam qua giao dien React.
+3.3.2. Admin cau hinh so ngay phep toi da theo chinh sach cong ty.
+3.3.3. Canh bao khi nhan vien da dung het hoac gan het ngay phep.
+Module 4: Bao Cao & Thong Ke (Reports & Analytics)
+[Python FastAPI + Spring Boot - Member 2 & 3 phu trach]
+Tong hop du lieu chuyen can - dau vao de tinh luong va danh gia hieu suat.
+4.1. Dashboard Real-time [React + Python]
+4.1.1. React ket noi WebSocket cua Python - hien thi ai dang co mat tai thoi diem hien tai.
+4.1.2. Dashboard canh bao: danh sach nhan vien khong phan hoi Random Check trong ngay.
+4.1.3. Bo loc nhanh: xem theo phong ban, theo ca lam viec.
+4.2. Bao Cao Theo Ngay [Java]
+4.2.1. Spring Boot tong hop: danh sach co mat / vang mat / di muon trong ngay.
+4.2.2. Xem chi tiet gio vao/ra cua tung nguoi, trang thai Random Check.
+4.2.3. Loc theo phong ban hoac ca nhan.
+4.3. Bao Cao Theo Thang & Xuat File [Python]
+4.3.1. Python tong hop: so ngay cong, so gio lam, so lan di muon, so lan khong phan hoi Random Check.
+4.3.2. Xuat file Excel (.xlsx) dung thu vien openpyxl - de tinh luong cuoi thang.
+4.3.3. Xuat file PDF dung thu vien reportlab - bang tong hop ngay cong chinh thuc.
+Module 5: He Thong & Bao Mat (System & Security)
+[Python FastAPI + Spring Boot ca hai - Member 1, 2, 3 phu trach]
+Nen tang van hanh toan bo he thong tren mang LAN.
+5.1. Bao Mat JWT Dung Chung [Java + Python] - Quan trong
+5.1.1. Spring Boot tao JWT Token khi dang nhap, ky bang secret key chung.
+5.1.2. Python FastAPI xac minh JWT Token tu React bang cung secret key do truoc khi xu ly moi request.
+5.1.3. Token het han sau thoi gian quy dinh, React tu dong redirect ve trang dang nhap.
+5.2. Trien Khai Microservices Tren Mang LAN [Java + Python] - Diem khac biet
+5.2.1. 1 may chu duy nhat chay dong thoi: Spring Boot (cong 8080) + Python FastAPI (cong 8000) + MySQL.
+5.2.2. Toan bo nhan vien truy cap React qua IP noi bo - khong can cai dat gi tren may client.
+5.2.3. Khong can Internet, khong phu thuoc dich vu ben ngoai - du lieu hoan toan noi bo.
+5.2.4. File start_server.bat tu dong khoi dong toan bo he thong chi bang 1 cu double-click.
+5.3. WebSocket Real-time [Python]
+5.3.1. Python FastAPI quan ly toan bo kenh WebSocket - broadcast khi co cham cong moi, khi Random Check kich hoat, khi co don nghi phep.
+5.3.2. Dashboard Manager cap nhat tuc thi, khong can F5 trang.
+5.3.3. Popup Random Check hien tren man hinh nhan vien ngay lap tuc khi Python gui lenh.
+5.4. Nhat Ky He Thong (Audit Log) [Java]
+5.4.1. Spring Boot ghi lai toan bo hoat dong quan trong: dang nhap, thay doi nhan su, duyet don.
+5.4.2. Python ghi rieng log cham cong va Random Check.
+5.4.3. Admin xem nhat ky hop nhat de kiem tra bao mat va truy vet su co.
+Tom Tat - Ma Tran Module
+Module
+Cong nghe
+Thanh vien
+Diem doc dao
+Module 1 - Cham Cong
+Python FastAPI
+Member 2
+Gioi han IP, Random Check, Gan co bat thuong
+Module 2 - Nhan Su
+Spring Boot (Java)
+Member 1
+Hoc tu HRM, nen tang bao mat tot
+Module 3 - Nghi Phep
+Spring Boot (Java)
+Member 3
+Thong bao real-time qua WebSocket Python
+Module 4 - Bao Cao
+Python + Java
+Member 2 & 3
+Bao cao Random Check, xuat Excel/PDF bang Python
+Module 5 - He Thong
+Python + Java ca hai
+Member 1,2,3
+Microservices LAN, JWT chung, start_server.bat
