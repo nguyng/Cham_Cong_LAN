@@ -1,4 +1,4 @@
-﻿# PHẦN MỀM CHẤM CÔNG TRÊN MẠNG LAN
+# PHẦN MỀM CHẤM CÔNG TRÊN MẠNG LAN
 ## Mô Tả Các Module Chức Năng
 
 > **Môn học**: Lập Trình Mạng
@@ -149,3 +149,82 @@ Tổng hợp dữ liệu chuyên cần — đầu vào để tính lương và �
 | **Module 3** — Nghỉ Phép | ☕ Spring Boot | Member 3 | 🌟 Thông báo real-time qua WebSocket Python |
 | **Module 4** — Báo Cáo | 🐍 Python + ☕ Java | Member 2 & 3 | 🌟 Báo cáo Random Check, xuất Excel/PDF bằng Python |
 | **Module 5** — Hệ Thống | 🐍 + ☕ Cả hai | Member 1,2,3 | 🌟 Microservices LAN, JWT chung, start_server.bat |
+
+---
+
+## 9. 🔄 Quy Trình Tin Học Hóa Nghiệp Vụ Chấm Công (As-Is vs To-Be)
+
+Quy trình này mô tả cách hệ thống phần mềm thay thế và tối ưu hóa các quy trình quản lý nhân sự — chấm công thủ công truyền thống tại doanh nghiệp.
+
+---
+
+### 9.1. Quản lý Hồ sơ & Phân ca làm việc
+
+**🔴 Quy trình cũ (Thủ công):**
+Bộ phận HR dùng sổ sách hoặc file Excel rời rạc để lưu thông tin nhân viên. Trưởng phòng phải xếp lịch ca làm thủ công trên bảng trắng hoặc gửi qua Zalo/Email, dễ xảy ra nhầm lẫn, trùng ca.
+
+**🟢 Quy trình mới (Tin học hóa):**
+- Admin khai báo toàn bộ nhân viên và cơ cấu phòng ban trên Hệ thống (**Spring Boot**).
+- Manager thiết lập ca làm việc và gán ca cho nhân viên bằng vài click chuột trên giao diện Web.
+- Dữ liệu đồng bộ tức thời đến mọi nhân viên.
+
+---
+
+### 9.2. Hoạt động Chấm Công Hàng Ngày
+
+**🔴 Quy trình cũ (Thủ công):**
+Nhân viên phải xếp hàng quét vân tay tại máy gắn ở cửa ra vào. Thường xuyên gặp lỗi (máy không nhận vân tay, tay ướt, quên quét) và phải nhờ HR xử lý ngoại lệ.
+
+**🟢 Quy trình mới (Tin học hóa):**
+- Nhân viên ngồi ngay tại bàn làm việc, mở trình duyệt và click **"Chấm Công Vào/Ra"**.
+- Trạm **Python FastAPI** tự động đánh mốc thời gian thực, đối chiếu IP mạng LAN (không cho phép dùng 4G/Wifi ngoài) để xác thực vị trí.
+- Tự động phân loại: **Đúng giờ / Đi muộn / Về sớm**.
+
+---
+
+### 9.3. Giám sát & Chống gian lận (Trong giờ hành chính)
+
+**🔴 Quy trình cũ (Thủ công):**
+Quản lý phải đi vòng quanh văn phòng giám sát, hoặc kiểm tra camera để xem nhân viên có mặt tại bàn hay không (tốn thời gian, không hiệu quả). Máy vân tay không thể chống được việc *"nhờ người quẹt thẻ hộ rồi đi ra ngoài"*.
+
+**🟢 Quy trình mới (Tin học hóa):**
+- Hệ thống áp dụng **AI/Engine Random Check** (Python APScheduler), thỉnh thoảng sẽ tự động bật Popup trên màn hình máy tính của nhân viên.
+- Nhân viên phải click xác nhận trong vòng X phút.
+- Nếu bỏ lỡ → hệ thống tự động ghi nhận vắng mặt và bắn thông báo **Real-time qua WebSocket** về Dashboard của Manager.
+
+---
+
+### 9.4. Xử lý Đơn xin nghỉ phép
+
+**🔴 Quy trình cũ (Thủ công):**
+Nhân viên viết đơn giấy hoặc gửi email. Đơn phải qua nhiều tay (Trưởng nhóm → Trưởng phòng → HR), mất thời gian chờ đợi, dễ thất lạc đơn và khó theo dõi quỹ ngày phép còn lại.
+
+**🟢 Quy trình mới (Tin học hóa):**
+- Nhân viên điền Form xin nghỉ ngay trên Web (**React**).
+- Manager nhận được thông báo, duyệt/từ chối chỉ bằng **1 click**.
+- Hệ thống (**Java**) tự động cập nhật trạng thái và trừ dần vào quỹ ngày phép của nhân viên đó.
+
+---
+
+### 9.5. Tổng hợp Báo Cáo & Tính Lương Cuối Tháng
+
+**🔴 Quy trình cũ (Thủ công):**
+Kế toán/HR mất từ 2–3 ngày cuối tháng để trút dữ liệu từ máy vân tay ra USB, ngồi mò mẫm đối chiếu file Excel vân tay với đống giấy tờ xin nghỉ phép để chốt công. Cực kỳ dễ sai sót.
+
+**🟢 Quy trình mới (Tin học hóa):**
+- Hệ thống tự động tích hợp dữ liệu chấm công (**Python**) và dữ liệu nghỉ phép hợp lệ (**Java**).
+- HR chỉ việc ấn nút **"Xuất báo cáo tháng"**, hệ thống sẽ xuất ra file Excel/PDF (bằng thư viện `openpyxl` / `reportlab`) hoàn chỉnh chỉ trong **3–5 giây**.
+- Dữ liệu chính xác tuyệt đối.
+
+---
+
+## 💡 Bảng So Sánh Tóm Tắt (Dùng cho Slide thuyết trình)
+
+> Tóm tắt phần quy trình tin học hóa thành bảng so sánh ngắn gọn để đưa vào slide thuyết trình:
+
+| Nghiệp Vụ | 🔴 Trước đây (Thủ công) | 🟢 Hệ thống LAN System (Mới) | ✅ Lợi ích mang lại |
+|---|---|---|---|
+| **Điểm danh** | Máy vân tay / Sổ sách | Click trên máy tính (Check IP LAN) | Nhanh chóng, không ùn tắc, 0đ chi phí máy móc |
+| **Giám sát** | Bằng mắt thường / Camera | Popup Random Check + Gắn cờ tự động | Chủ động chống gian lận, cảnh báo real-time |
+| **Nghỉ phép** | Đơn giấy, ký nháy | Form điện tử, Duyệt 1-click | Tiết kiệm thời gian, không thất lạc giấy tờ |
+| **Chốt công** | Mất 2–3 ngày đối chiếu Excel | Xuất báo cáo tự động trong 5 giây | Chính xác 100%, giảm tải cho HR |
