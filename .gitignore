@@ -15,6 +15,8 @@ spring-boot-*.log
 node_modules/
 dist/
 build/
+dist_portable/
+build_portable/
 .env
 .env.local
 .env.production
@@ -42,3 +44,26 @@ application-prod.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Python isolated environment / generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.coverage
+htmlcov/
+.tmp-venv/
+.tmp-exe/
+backups/
+exports/
+*.db
+*.sqlite3
+server/.env
+client/config.json
+dist/
+build/
+*.spec
+test_backups/
+.test-runtime/

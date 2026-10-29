@@ -1,0 +1,1 @@
+"""Admin desktop entry point."""
