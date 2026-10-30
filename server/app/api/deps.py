@@ -26,7 +26,9 @@ def client_ip(request: Request) -> str:
 
 def require_lan(ip: str):
     address = ipaddress.ip_address(ip)
-    if not any(address in ipaddress.ip_network(network) for network in get_settings().allowed_networks):
+    if not any(
+        address in ipaddress.ip_network(network) for network in get_settings().allowed_networks
+    ):
         raise HTTPException(403, "Địa chỉ IP không thuộc mạng nội bộ được phép")
 
 

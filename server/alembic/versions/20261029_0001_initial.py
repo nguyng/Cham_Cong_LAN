@@ -3,6 +3,7 @@
 Revision ID: 20261029_0001
 Revises: None
 """
+
 from alembic import op
 from app.database.session import Base
 from app.models import entities  # noqa: F401

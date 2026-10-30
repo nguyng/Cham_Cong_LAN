@@ -13,6 +13,7 @@ from app.ui.style import ADMIN_LIGHT, LIGHT
 
 def main(admin_only: bool = False):
     application = QApplication(sys.argv)
+    application.setQuitOnLastWindowClosed(False)
     application.setApplicationName("LAN Attendance Admin" if admin_only else "LAN Attendance")
     application.setStyleSheet(ADMIN_LIGHT if admin_only else LIGHT)
     pixmap = QPixmap(680, 360)
@@ -48,18 +49,48 @@ def main(admin_only: bool = False):
         else Path(__file__).resolve().parents[1]
     )
     api = ApiClient(root / "config.json")
-    login = LoginDialog(api, admin_only=admin_only)
-    if login.exec() != LoginDialog.Accepted:
-        return 0
-    if admin_only and api.role not in ("ADMIN", "MANAGER"):
-        from PySide6.QtWidgets import QMessageBox
+    active_windows = {"login": None, "main": None}
 
-        QMessageBox.critical(
-            None, "Từ chối truy cập", "Ứng dụng quản trị yêu cầu quyền Manager hoặc Admin."
+    def end_session(logged_out, window):
+        if active_windows["main"] is not window:
+            return
+        active_windows["main"] = None
+        window.deleteLater()
+        if logged_out:
+            QTimer.singleShot(0, show_login)
+        else:
+            application.quit()
+
+    def show_login():
+        login = LoginDialog(api, admin_only=admin_only)
+        active_windows["login"] = login
+        if login.exec() != LoginDialog.Accepted:
+            active_windows["login"] = None
+            login.deleteLater()
+            application.quit()
+            return
+        active_windows["login"] = None
+        login.deleteLater()
+        if admin_only and api.role not in ("ADMIN", "MANAGER"):
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(
+                None, "Từ chối truy cập", "Ứng dụng quản trị yêu cầu quyền Manager hoặc Admin."
+            )
+            api.token = None
+            api.role = None
+            api.employee_id = None
+            QTimer.singleShot(0, show_login)
+            return
+
+        window = MainWindow(api, admin_only=admin_only)
+        active_windows["main"] = window
+        window.session_ended.connect(
+            lambda logged_out, current=window: end_session(logged_out, current)
         )
-        return 1
-    window = MainWindow(api, admin_only=admin_only)
-    window.show()
+        window.show()
+
+    QTimer.singleShot(0, show_login)
     return application.exec()
 
 

@@ -26,7 +26,7 @@ def test_launcher_migrates_a_new_sqlite_database():
         revision = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert "users" in tables
     assert "attendance_records" in tables
-    assert revision == "20261029_0001"
+    assert revision == "20261030_0002"
 
 
 def test_packaged_bootstrap_creates_admin_without_plaintext_password():

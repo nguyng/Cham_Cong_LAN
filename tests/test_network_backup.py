@@ -30,7 +30,9 @@ def test_sqlite_restore_round_trip(monkeypatch):
     with sqlite3.connect(database) as connection:
         connection.execute("create table sample(value text)")
         connection.execute("insert into sample values ('before')")
-    settings = SimpleNamespace(database_url=f"sqlite:///{database}", backup_directory=str(backup_dir))
+    settings = SimpleNamespace(
+        database_url=f"sqlite:///{database}", backup_directory=str(backup_dir)
+    )
     monkeypatch.setattr(backup_module, "get_settings", lambda: settings)
     saved = backup_module.backup_database()
     with sqlite3.connect(database) as connection:

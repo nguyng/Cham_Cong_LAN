@@ -19,7 +19,9 @@ def test_device_must_be_approved_before_attendance(client, employee_headers, adm
     )
     assert denied.status_code == 403
     device_id = registered.json()["id"]
-    approved = client.patch(f"/api/v1/devices/{device_id}/approve", params={"approved": True}, headers=admin_headers)
+    approved = client.patch(
+        f"/api/v1/devices/{device_id}/approve", params={"approved": True}, headers=admin_headers
+    )
     assert approved.status_code == 200
     accepted = client.post(
         "/api/v1/attendance/check-in",
@@ -43,7 +45,12 @@ def test_adjustment_request_list_and_review(client, employee_headers, manager_he
     proposed = datetime.now(UTC) - timedelta(minutes=10)
     requested = client.post(
         "/api/v1/attendance/adjustments",
-        json={"attendance_id": attendance_id, "proposed_check_in": proposed.isoformat(), "proposed_check_out": None, "reason": "Máy trạm khởi động chậm nên cần điều chỉnh"},
+        json={
+            "attendance_id": attendance_id,
+            "proposed_check_in": proposed.isoformat(),
+            "proposed_check_out": None,
+            "reason": "Máy trạm khởi động chậm nên cần điều chỉnh",
+        },
         headers=employee_headers,
     )
     assert requested.status_code == 201
@@ -82,11 +89,15 @@ def test_websocket_receives_attendance_broadcast(client):
 def test_mark_own_notification_read(client, employee_headers):
     with SessionLocal.begin() as db:
         user_id = 3
-        item = Notification(user_id=user_id, title="Kiểm thử", message="Nội dung", category="SYSTEM")
+        item = Notification(
+            user_id=user_id, title="Kiểm thử", message="Nội dung", category="SYSTEM"
+        )
         db.add(item)
         db.flush()
         notification_id = item.id
-    response = client.post(f"/api/v1/notifications/{notification_id}/read", headers=employee_headers)
+    response = client.post(
+        f"/api/v1/notifications/{notification_id}/read", headers=employee_headers
+    )
     assert response.status_code == 204
     with SessionLocal() as db:
         assert db.get(Notification, notification_id).read_at is not None

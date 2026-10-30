@@ -28,6 +28,27 @@ $env:PYTHONPATH = "$PWD\client"
 .\.venv\Scripts\python.exe .\admin\main.py
 ```
 
+## Dữ liệu kiểm thử có sẵn
+
+Database của bản portable đã được nạp 5 mẫu cho từng nhóm chức năng. Các tài khoản thử:
+
+| Vai trò | Tên đăng nhập | Mật khẩu |
+|---|---|---|
+| Admin | `admin` | `123456` |
+| Manager | `manage` | `123456` |
+| Employee | `user1` | `123456` |
+| Employee | `user2` | `123456` |
+| Employee | `user3` | `123456` |
+
+Muốn đưa dữ liệu kiểm thử về trạng thái ban đầu, hãy tắt Server rồi chạy lại lệnh sau từ thư mục dự án:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\seed_sample_data.py `
+  --database ".\dist_portable\AttendanceServer\data\attendance.db"
+```
+
+Lệnh có thể chạy lặp lại và không xóa dữ liệu thật. Bản sao trước khi nạp dữ liệu nằm trong thư mục `dist_portable\AttendanceServer\backups`.
+
 ## Kiểm thử và đóng gói
 
 ```powershell

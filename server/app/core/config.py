@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     discovery_port: int = 37020
     random_check_interval_minutes: int = 120
     random_check_response_seconds: int = 180
+    cleanup_interval_hours: int = 6
+    idempotency_retention_hours: int = 24
+    login_session_retention_days: int = 7
     backup_directory: str = "backups"
     tls_cert_file: str | None = None
     tls_key_file: str | None = None

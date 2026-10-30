@@ -28,7 +28,13 @@ OpenAPI tương tác có tại `/docs` khi Server chạy. Các nhóm đường d
 - `/api/v1/ws`: thông báo thời gian thực.
 - `/api/v1/admin/backup`, `/admin/backups`, `/admin/restore/{filename}`: quản trị dữ liệu.
 
+`POST /api/v1/leaves/{id}/cancel` cho phép hủy đơn đang chờ hoặc đơn tương lai đã duyệt; quỹ phép được hoàn lại trong cùng transaction. Các API danh sách nhận `page` và `page_size` (tối đa 200) và trả `{items, pagination}`; nếu không truyền `page`, Server vẫn trả danh sách thuần để tương thích Client cũ.
+
+Điểm vào `app/main.py` chỉ xuất ASGI app. Các route được đăng ký bằng bảy `APIRouter` theo domain trong `app/api/routers.py`, còn phần lắp ráp/lifespan nằm tại `app/api/application.py`.
+
 Mọi thời gian chấm công được tạo ở Server. Request check-in/out có khóa idempotency; unique constraint ở database là lớp bảo vệ thứ hai.
+
+Scheduler dọn `IdempotencyRecord` quá 24 giờ và `LoginSession` hết hạn/đã thu hồi quá 7 ngày theo chu kỳ 6 giờ. Ba thời hạn này cấu hình được bằng biến môi trường `IDEMPOTENCY_RETENTION_HOURS`, `LOGIN_SESSION_RETENTION_DAYS` và `CLEANUP_INTERVAL_HOURS`.
 
 SQLite chỉ nằm trên ổ đĩa cục bộ của máy Server. Client không mở hoặc chia sẻ trực tiếp tệp database; mọi truy cập vẫn qua FastAPI. Chế độ WAL, `busy_timeout=30000`, transaction và foreign keys được bật khi tạo kết nối để phục vụ nhiều Client LAN ở quy mô nội bộ.
 

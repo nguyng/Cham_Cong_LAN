@@ -30,7 +30,12 @@ class DiscoveryServer:
                     data, address = sock.recvfrom(512)
                     if data == b"LAN_ATTENDANCE_DISCOVER_V1":
                         payload = json.dumps(
-                            {"service": "LAN Attendance", "port": settings.server_port, "https": bool(settings.tls_cert_file), "protocol": 1}
+                            {
+                                "service": "LAN Attendance",
+                                "port": settings.server_port,
+                                "https": bool(settings.tls_cert_file),
+                                "protocol": 1,
+                            }
                         ).encode("utf-8")
                         sock.sendto(payload, address)
                 except TimeoutError:

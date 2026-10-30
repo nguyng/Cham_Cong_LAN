@@ -1,8 +1,8 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView
-from PySide6.QtCore import QDate, QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PySide6.QtCore import QDate, QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -382,6 +382,8 @@ STATUS_TEXT = {
 
 
 class MainWindow(QMainWindow):
+    session_ended = Signal(bool)
+
     def __init__(self, api, admin_only=False):
         super().__init__()
         self.api = api
@@ -391,7 +393,10 @@ class MainWindow(QMainWindow):
         self.table_filters = {}
         self.empty_states = {}
         self.loading_bars = {}
+        self.table_pagination = {}
         self.nav_buttons = []
+        self._logout_requested = False
+        self._session_end_emitted = False
         self.setWindowTitle(
             "LAN Attendance — Trung tâm quản trị"
             if admin_only
@@ -564,6 +569,34 @@ class MainWindow(QMainWindow):
         self.empty_states[table] = empty
         layout.addWidget(empty)
         layout.addWidget(table)
+        pagination_bar = QHBoxLayout()
+        previous_page = QPushButton("‹ Trang trước")
+        previous_page.setProperty("secondary", True)
+        page_label = QLabel("Trang 1/1 — 0 bản ghi")
+        next_page = QPushButton("Trang sau ›")
+        next_page.setProperty("secondary", True)
+        previous_page.setEnabled(False)
+        next_page.setEnabled(False)
+        pagination_bar.addStretch()
+        pagination_bar.addWidget(previous_page)
+        pagination_bar.addWidget(page_label)
+        pagination_bar.addWidget(next_page)
+        self.table_pagination[table] = {
+            "page": 1,
+            "page_size": 50,
+            "pages": 1,
+            "total": 0,
+            "label": page_label,
+            "previous": previous_page,
+            "next": next_page,
+        }
+        previous_page.clicked.connect(
+            lambda _=False, t=table, e=endpoint: self.change_table_page(t, e, -1)
+        )
+        next_page.clicked.connect(
+            lambda _=False, t=table, e=endpoint: self.change_table_page(t, e, 1)
+        )
+        layout.addLayout(pagination_bar)
         QTimer.singleShot(100, lambda t=table, e=endpoint: self.load_table(t, e))
         return page
 
@@ -688,6 +721,15 @@ class MainWindow(QMainWindow):
         except ApiError:
             return []
 
+    def change_table_page(self, table, endpoint, direction):
+        state = self.table_pagination.get(table)
+        if not state:
+            return
+        target = state["page"] + direction
+        if 1 <= target <= state["pages"]:
+            state["page"] = target
+            self.load_table(table, endpoint)
+
     @staticmethod
     def empty_message(name):
         messages = {
@@ -753,7 +795,10 @@ class MainWindow(QMainWindow):
         common = {
             "Quản lý nhân viên": [("Gửi Random Check", lambda: self.trigger_random_check(table))],
             "Lịch sử": [("Yêu cầu điều chỉnh", lambda: self.request_adjustment(table))],
-            "Nghỉ phép": [("Tạo đơn", lambda: self.create_leave(table))],
+            "Nghỉ phép": [
+                ("Tạo đơn", lambda: self.create_leave(table)),
+                ("Hủy đơn", lambda: self.cancel_leave(table)),
+            ],
             "Thông báo": [("Đánh dấu đã đọc", lambda: self.mark_read(table))],
             "Hồ sơ cá nhân": [("Đổi mật khẩu", self.change_password)],
             "Phân ca": [("Phân ca", lambda: self.assign_shift(table))],
@@ -839,6 +884,10 @@ class MainWindow(QMainWindow):
                 start=QDate.currentDate().addMonths(-1).toString("yyyy-MM-dd"),
                 end=QDate.currentDate().toString("yyyy-MM-dd"),
             )
+        pagination_state = self.table_pagination.get(table)
+        if pagination_state:
+            params["page"] = pagination_state["page"]
+            params["page_size"] = pagination_state["page_size"]
         loading = self.loading_bars.get(table)
         if loading:
             loading.show()
@@ -851,7 +900,24 @@ class MainWindow(QMainWindow):
         finally:
             if loading:
                 loading.hide()
-        if path == "/api/v1/clients" and isinstance(data, dict):
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            rows = data["items"]
+            metadata = data.get("pagination", {})
+            if pagination_state:
+                pagination_state.update(
+                    page=int(metadata.get("page", 1)),
+                    pages=int(metadata.get("pages", 1)),
+                    total=int(metadata.get("total", len(rows))),
+                )
+                pagination_state["label"].setText(
+                    f"Trang {pagination_state['page']}/{pagination_state['pages']}"
+                    f" — {pagination_state['total']} bản ghi"
+                )
+                pagination_state["previous"].setEnabled(pagination_state["page"] > 1)
+                pagination_state["next"].setEnabled(
+                    pagination_state["page"] < pagination_state["pages"]
+                )
+        elif path == "/api/v1/clients" and isinstance(data, dict):
             rows = [{"user_id": user_id, "connections": 1} for user_id in data.get("user_ids", [])]
         else:
             rows = data if isinstance(data, list) else [data]
@@ -969,6 +1035,33 @@ class MainWindow(QMainWindow):
         ]
         if self.submit_dialog("Tạo đơn nghỉ phép", fields, "POST", "/api/v1/leaves"):
             self.load_table(table, "/api/v1/leaves")
+
+    def cancel_leave(self, table):
+        row = self.selected(table)
+        if not row:
+            return
+        if row.get("status") not in ("PENDING", "APPROVED"):
+            QMessageBox.information(
+                self, "Không thể hủy", "Chỉ có thể hủy đơn đang chờ hoặc đã duyệt."
+            )
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "Hủy đơn nghỉ phép",
+                f"Bạn chắc chắn muốn hủy đơn #{row['id']}?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            != QMessageBox.Yes
+        ):
+            return
+        try:
+            self.api.request("POST", f"/api/v1/leaves/{row['id']}/cancel")
+            self.show_toast("Đã hủy đơn nghỉ phép.")
+            self.load_table(table, "/api/v1/leaves")
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không hủy được đơn", str(exc))
 
     def create_employee(self, table):
         try:
@@ -1533,25 +1626,63 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Không thể chấm công", str(exc))
 
     def realtime_message(self, payload):
-        if (
-            payload.get("type") == "random_check"
-            and QMessageBox.question(self, "Xác minh hiện diện", "Xác nhận bạn đang làm việc?")
-            == QMessageBox.Yes
-        ):
-            try:
-                self.api.request(
-                    "POST",
-                    "/api/v1/random-checks/respond",
-                    json={"challenge_token": payload["challenge_token"]},
-                )
-            except ApiError as exc:
-                QMessageBox.warning(self, "Xác minh thất bại", str(exc))
+        if payload.get("type") == "random_check":
+            self.show_random_check(payload)
         elif payload.get("type") in (
             "attendance_changed",
             "leave_requested",
+            "leave_cancelled",
             "security_alerts_updated",
         ):
             self.refresh_dashboard()
+
+    def show_random_check(self, payload):
+        try:
+            expires_at = datetime.fromisoformat(payload["expires_at"].replace("Z", "+00:00"))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+        except (KeyError, TypeError, ValueError):
+            QMessageBox.warning(self, "Random Check", "Yêu cầu xác minh không có hạn hợp lệ.")
+            return
+
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Random Check — Xác minh hiện diện")
+        dialog.setIcon(QMessageBox.Question)
+        dialog.setText("Bạn có đang làm việc tại máy đã đăng ký không?")
+        dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        confirm_button = dialog.button(QMessageBox.Yes)
+        confirm_button.setText("Xác nhận hiện diện")
+        dialog.button(QMessageBox.No).setText("Không xác nhận")
+        timer = QTimer(dialog)
+        remaining = {"seconds": 0}
+
+        def update_countdown():
+            seconds = max(0, int((expires_at - datetime.now(UTC)).total_seconds() + 0.999))
+            remaining["seconds"] = seconds
+            dialog.setInformativeText(f"Thời gian còn lại: {seconds:02d} giây")
+            if seconds <= 0:
+                timer.stop()
+                confirm_button.setEnabled(False)
+                dialog.setText("Yêu cầu Random Check đã hết hạn.")
+                QTimer.singleShot(1000, dialog.reject)
+
+        timer.timeout.connect(update_countdown)
+        update_countdown()
+        if remaining["seconds"] > 0:
+            timer.start(250)
+        accepted = dialog.exec() == QMessageBox.Yes and remaining["seconds"] > 0
+        timer.stop()
+        if not accepted:
+            return
+        try:
+            self.api.request(
+                "POST",
+                "/api/v1/random-checks/respond",
+                json={"challenge_token": payload["challenge_token"]},
+            )
+            self.show_toast("Đã xác minh hiện diện thành công.")
+        except ApiError as exc:
+            QMessageBox.warning(self, "Xác minh thất bại", str(exc))
 
     def connection_state(self, connected):
         self.connection.setText("● Đã kết nối" if connected else "● Mất kết nối — đang thử lại")
@@ -1601,14 +1732,27 @@ class MainWindow(QMainWindow):
                 QMessageBox.question(
                     self,
                     "Không kết nối được Server",
-                    f"Không thể thu hồi phiên trên Server: {exc}\nVẫn đóng ứng dụng?",
+                    f"Không thể thu hồi phiên trên Server: {exc}\nVẫn đăng xuất?",
                 )
                 != QMessageBox.Yes
             ):
                 return
-        self.close()
+        self.api.token = None
+        self.api.role = None
+        self.api.employee_id = None
+        self._logout_requested = True
+        self._finish_session(logged_out=True)
 
-    def closeEvent(self, event):
+    def _finish_session(self, logged_out):
+        if self._session_end_emitted:
+            return
         self.realtime.stop()
         self.realtime.wait(2000)
+        self._session_end_emitted = True
+        if logged_out:
+            self.hide()
+        self.session_ended.emit(logged_out)
+
+    def closeEvent(self, event):
+        self._finish_session(logged_out=self._logout_requested)
         event.accept()

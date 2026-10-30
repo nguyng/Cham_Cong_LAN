@@ -32,7 +32,12 @@ class ApiClient:
             example = self.config_path.with_name("config.example.json")
             if example.exists():
                 return json.loads(example.read_text(encoding="utf-8"))
-            return {"server_url": "http://127.0.0.1:8000", "verify_tls": True, "discovery_port": 37020, "request_timeout_seconds": 10}
+            return {
+                "server_url": "http://127.0.0.1:8000",
+                "verify_tls": True,
+                "discovery_port": 37020,
+                "request_timeout_seconds": 10,
+            }
         return json.loads(self.config_path.read_text(encoding="utf-8"))
 
     def _make_client(self) -> httpx.Client:
@@ -67,7 +72,15 @@ class ApiClient:
         return response.json()
 
     def login(self, username: str, password: str):
-        data = self.request("POST", "/api/v1/auth/login", json={"username": username, "password": password, "device_fingerprint": self.device_fingerprint})
+        data = self.request(
+            "POST",
+            "/api/v1/auth/login",
+            json={
+                "username": username,
+                "password": password,
+                "device_fingerprint": self.device_fingerprint,
+            },
+        )
         self.token = data["access_token"]
         self.role = data["role"]
         self.employee_id = data["employee_id"]
@@ -82,11 +95,20 @@ class ApiClient:
             if "đã được đăng ký" not in str(exc):
                 raise
             devices = self.request("GET", "/api/v1/devices/me")
-            self.device_registration_pending = not any(item["approved"] and item["active"] for item in devices)
+            self.device_registration_pending = not any(
+                item["approved"] and item["active"] for item in devices
+            )
         return data
 
     def attendance(self, action: str):
-        return self.request("POST", f"/api/v1/attendance/{action}", json={"device_fingerprint": self.device_fingerprint, "idempotency_key": str(uuid.uuid4())})
+        return self.request(
+            "POST",
+            f"/api/v1/attendance/{action}",
+            json={
+                "device_fingerprint": self.device_fingerprint,
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
 
     def download(self, path: str, params: dict | None = None) -> bytes:
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -120,6 +142,8 @@ class ApiClient:
 
     def set_server(self, url: str):
         self.config["server_url"] = url.rstrip("/")
-        self.config_path.write_text(json.dumps(self.config, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.config_path.write_text(
+            json.dumps(self.config, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         self._client.close()
         self._client = self._make_client()

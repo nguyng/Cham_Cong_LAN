@@ -17,6 +17,7 @@ dist/
 build/
 dist_portable/
 build_portable/
+build_portable_runtime/
 .env
 .env.local
 .env.production
@@ -65,5 +66,7 @@ client/config.json
 dist/
 build/
 *.spec
+!packaging/
+!packaging/*.spec
 test_backups/
 .test-runtime/

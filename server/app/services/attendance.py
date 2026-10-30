@@ -48,7 +48,9 @@ def assignment_for_now(db: Session, employee_id: int, now: datetime) -> ShiftAss
     raise HTTPException(409, "Không có ca làm phù hợp tại thời điểm hiện tại")
 
 
-def check_in(db: Session, employee: Employee, ip: str, device_id: int | None, now: datetime | None = None):
+def check_in(
+    db: Session, employee: Employee, ip: str, device_id: int | None, now: datetime | None = None
+):
     now = now or utc_now()
     assignment = assignment_for_now(db, employee.id, now)
     existing = db.scalar(
@@ -61,7 +63,9 @@ def check_in(db: Session, employee: Employee, ip: str, device_id: int | None, no
     if existing:
         raise HTTPException(409, "Ca này đã được check-in")
     shift_start, _ = shift_window(assignment.work_date, assignment.shift)
-    late = max(0, int((now - shift_start).total_seconds() // 60) - assignment.shift.late_grace_minutes)
+    late = max(
+        0, int((now - shift_start).total_seconds() // 60) - assignment.shift.late_grace_minutes
+    )
     record = AttendanceRecord(
         employee_id=employee.id,
         shift_id=assignment.shift_id,
@@ -122,11 +126,17 @@ def recalculate(record: AttendanceRecord):
         return
     start, end = shift_window(record.work_date, record.shift)
     record.late_minutes = max(
-        0, int((as_utc(record.check_in_at) - start).total_seconds() // 60) - record.shift.late_grace_minutes
+        0,
+        int((as_utc(record.check_in_at) - start).total_seconds() // 60)
+        - record.shift.late_grace_minutes,
     )
     record.early_leave_minutes = max(
-        0, int((end - as_utc(record.check_out_at)).total_seconds() // 60) - record.shift.early_grace_minutes
+        0,
+        int((end - as_utc(record.check_out_at)).total_seconds() // 60)
+        - record.shift.early_grace_minutes,
     )
     record.worked_minutes = max(
-        0, int((as_utc(record.check_out_at) - as_utc(record.check_in_at)).total_seconds() // 60) - record.break_minutes
+        0,
+        int((as_utc(record.check_out_at) - as_utc(record.check_in_at)).total_seconds() // 60)
+        - record.break_minutes,
     )

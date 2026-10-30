@@ -254,7 +254,9 @@ class LoginSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     client_ip: Mapped[str] = mapped_column(String(64))
     device_fingerprint: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -330,4 +332,6 @@ class IdempotencyRecord(Base):
     operation: Mapped[str] = mapped_column(String(50))
     request_key: Mapped[str] = mapped_column(String(100))
     response_data: Mapped[dict | None] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

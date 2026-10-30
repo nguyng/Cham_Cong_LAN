@@ -10,7 +10,7 @@ class ORMModel(BaseModel):
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=80)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     device_fingerprint: str | None = Field(default=None, max_length=128)
 
 

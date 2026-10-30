@@ -8,15 +8,37 @@ $WorkPath = Join-Path $Root 'build_portable'
 $ServerRuntimePath = Join-Path $DistPath 'AttendanceServer\server.env'
 $ClientRuntimePath = Join-Path $DistPath 'AttendanceClient\config.json'
 $AdminRuntimePath = Join-Path $DistPath 'AttendanceAdmin\config.json'
+$ServerDataPath = Join-Path $DistPath 'AttendanceServer\data'
+$ServerBackupPath = Join-Path $DistPath 'AttendanceServer\backups'
+$RuntimePreservePath = Join-Path $Root 'build_portable_runtime'
 $ServerRuntimeConfig = if (Test-Path -LiteralPath $ServerRuntimePath) { [IO.File]::ReadAllText($ServerRuntimePath) } else { $null }
 $ClientRuntimeConfig = if (Test-Path -LiteralPath $ClientRuntimePath) { [IO.File]::ReadAllText($ClientRuntimePath) } else { $null }
 $AdminRuntimeConfig = if (Test-Path -LiteralPath $AdminRuntimePath) { [IO.File]::ReadAllText($AdminRuntimePath) } else { $null }
+if (Test-Path -LiteralPath $RuntimePreservePath) {
+    Remove-Item -LiteralPath $RuntimePreservePath -Recurse -Force
+}
+New-Item -ItemType Directory -Path $RuntimePreservePath -Force | Out-Null
+if (Test-Path -LiteralPath $ServerDataPath) {
+    Copy-Item -LiteralPath $ServerDataPath -Destination (Join-Path $RuntimePreservePath 'data') -Recurse -Force
+}
+if (Test-Path -LiteralPath $ServerBackupPath) {
+    Copy-Item -LiteralPath $ServerBackupPath -Destination (Join-Path $RuntimePreservePath 'backups') -Recurse -Force
+}
 Set-Location -LiteralPath $Root
 
 & $Python -m PyInstaller --noconfirm --clean `
     --distpath $DistPath --workpath $WorkPath `
     'packaging\AttendanceServerPortable.spec'
-if ($LASTEXITCODE -ne 0) { throw 'Build AttendanceServer portable thất bại.' }
+$ServerBuildExitCode = $LASTEXITCODE
+$ServerPortablePath = Join-Path $DistPath 'AttendanceServer'
+if (Test-Path -LiteralPath (Join-Path $RuntimePreservePath 'data')) {
+    Copy-Item -LiteralPath (Join-Path $RuntimePreservePath 'data') -Destination $ServerPortablePath -Recurse -Force
+}
+if (Test-Path -LiteralPath (Join-Path $RuntimePreservePath 'backups')) {
+    Copy-Item -LiteralPath (Join-Path $RuntimePreservePath 'backups') -Destination $ServerPortablePath -Recurse -Force
+}
+Remove-Item -LiteralPath $RuntimePreservePath -Recurse -Force
+if ($ServerBuildExitCode -ne 0) { throw 'Build AttendanceServer portable thất bại.' }
 
 & $Python -m PyInstaller --noconfirm --clean `
     --distpath $DistPath --workpath $WorkPath `
