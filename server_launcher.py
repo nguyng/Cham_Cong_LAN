@@ -1,4 +1,5 @@
 import argparse
+import ctypes
 import getpass
 import sys
 from pathlib import Path
@@ -19,6 +20,15 @@ def configure_console_encoding():
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, OSError):
             continue
+
+
+def configure_console_window():
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.kernel32.SetConsoleTitleW("Attendance Server - LAN")
+    except (AttributeError, OSError):
+        pass
 
 
 def run_migrations(database_url: str):
@@ -48,6 +58,7 @@ def command_line():
 
 def main():
     configure_console_encoding()
+    configure_console_window()
     arguments = command_line()
     settings = get_settings()
     run_migrations(settings.database_url)
@@ -73,6 +84,11 @@ def main():
             raise SystemExit(str(exc)) from exc
         print("Đã tạo Admin an toàn. Không ghi mật khẩu ra tệp hoặc màn hình.")
         return
+    print("=" * 64)
+    print("ATTENDANCE SERVER — CỬA SỔ QUẢN LÝ SERVER")
+    print(f"Địa chỉ: {settings.server_host}:{settings.server_port}")
+    print("Nhấn Ctrl+C hoặc đóng cửa sổ này để dừng Server.")
+    print("=" * 64)
     uvicorn.run(
         "app.main:app",
         host=settings.server_host,

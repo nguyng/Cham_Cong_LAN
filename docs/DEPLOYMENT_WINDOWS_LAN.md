@@ -62,6 +62,11 @@ Server tự chạy Alembic migration khi khởi động. Sau lần chạy đầu
 
 Mật khẩu được nhập hai lần ở chế độ ẩn và chỉ lưu dưới dạng Argon2 hash. Sau đó chạy `AttendanceServer.exe` không có tham số để mở dịch vụ.
 
+Khi vận hành thủ công, nên mở `AttendanceServer.exe` trong cửa sổ console hiển thị
+thay vì dùng `-WindowStyle Hidden`. Cửa sổ có tiêu đề `Attendance Server - LAN`, hiển
+thị log kết nối và có thể dừng an toàn bằng `Ctrl+C`. Lệnh chạy ba thành phần kèm
+cơ chế tự dừng Server sau khi Admin và Client đã đóng được ghi trong `README.md`.
+
 ## 3. HTTPS nội bộ
 
 Dùng chứng chỉ do CA nội bộ cấp cho tên DNS/IP máy Server. Cài CA gốc vào `Trusted Root Certification Authorities` trên từng Client. Không tắt `verify_tls` trong vận hành.

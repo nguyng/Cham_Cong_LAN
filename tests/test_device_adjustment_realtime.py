@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.database.session import SessionLocal
-from app.models.entities import Notification
+from app.models.entities import Department, Device, Employee, Notification
 
 
 def test_device_must_be_approved_before_attendance(client, employee_headers, admin_headers):
@@ -32,6 +32,53 @@ def test_device_must_be_approved_before_attendance(client, employee_headers, adm
     own_devices = client.get("/api/v1/devices/me", headers=employee_headers)
     assert own_devices.status_code == 200
     assert own_devices.json()[0]["approved"] is True
+
+
+def test_manager_can_approve_device_only_in_own_department(
+    client, employee_headers, manager_headers
+):
+    registered = client.post(
+        "/api/v1/devices",
+        json={"fingerprint": "manager-approved-device", "device_name": "Máy cùng phòng"},
+        headers=employee_headers,
+    )
+    assert registered.status_code == 201
+
+    approved = client.patch(
+        f"/api/v1/devices/{registered.json()['id']}/approve",
+        params={"approved": True},
+        headers=manager_headers,
+    )
+    assert approved.status_code == 200
+    assert approved.json()["approved"] is True
+
+    with SessionLocal.begin() as db:
+        other_department = Department(code="OTHER", name="Phòng khác")
+        db.add(other_department)
+        db.flush()
+        other_employee = Employee(
+            employee_code="NV-OTHER",
+            full_name="Nhân viên phòng khác",
+            email="other@example.local",
+            department_id=other_department.id,
+        )
+        db.add(other_employee)
+        db.flush()
+        other_device = Device(
+            employee_id=other_employee.id,
+            fingerprint_hash="outside-manager-scope",
+            device_name="Máy khác phòng",
+        )
+        db.add(other_device)
+        db.flush()
+        other_device_id = other_device.id
+
+    denied = client.patch(
+        f"/api/v1/devices/{other_device_id}/approve",
+        params={"approved": True},
+        headers=manager_headers,
+    )
+    assert denied.status_code == 403
 
 
 def test_adjustment_request_list_and_review(client, employee_headers, manager_headers):

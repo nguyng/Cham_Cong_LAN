@@ -483,7 +483,11 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(
                 200,
                 lambda: QMessageBox.information(
-                    self, "Thiết bị mới", "Thiết bị đang chờ Admin phê duyệt trước khi chấm công."
+                    self,
+                    "Thiết bị mới",
+                    "Máy này đã được đăng ký nhưng chưa được phê duyệt.\n\n"
+                    "Hãy mở AttendanceAdmin → Thiết bị → chọn máy này → Phê duyệt, "
+                    "sau đó chấm công lại.",
                 ),
             )
 
@@ -680,6 +684,8 @@ class MainWindow(QMainWindow):
         controls.addWidget(refresh)
         for label, handler in self.actions_for(name, table):
             button = QPushButton(label)
+            if label == "Xóa":
+                button.setProperty("danger", True)
             button.clicked.connect(handler)
             controls.addWidget(button)
         controls.addStretch()
@@ -768,6 +774,7 @@ class MainWindow(QMainWindow):
             ("Thêm nhân viên", "Quản lý nhân viên"),
             ("Phân ca", "Phân ca"),
             ("Duyệt nghỉ phép", "Duyệt nghỉ phép"),
+            ("Duyệt thiết bị", "Thiết bị"),
             ("Xử lý cảnh báo", "Cảnh báo"),
             ("Xem báo cáo", "Báo cáo"),
         ):
@@ -947,6 +954,10 @@ class MainWindow(QMainWindow):
                 ("Xác nhận", lambda: self.review(table, "alert", True)),
                 ("Bỏ cảnh báo", lambda: self.review(table, "alert", False)),
             ],
+            "Thiết bị": [
+                ("Phê duyệt", lambda: self.approve_device(table, True)),
+                ("Thu hồi", lambda: self.approve_device(table, False)),
+            ],
             "Báo cáo": [
                 ("Xuất Excel", lambda: self.export_report("xlsx", table)),
                 ("Xuất PDF", lambda: self.export_report("pdf", table)),
@@ -958,40 +969,76 @@ class MainWindow(QMainWindow):
                 ("Sửa", lambda: self.edit_employee(table)),
                 ("Ngừng/Kích hoạt", lambda: self.toggle_employee(table)),
                 ("Gửi Random Check", lambda: self.trigger_random_check(table)),
+                ("Xóa", lambda: self.delete_record(table, "employees")),
             ],
             "Phòng ban": [
                 ("Thêm", lambda: self.create_department(table)),
                 ("Sửa", lambda: self.edit_department(table)),
                 ("Ngừng", lambda: self.deactivate(table, "departments")),
+                ("Xóa", lambda: self.delete_record(table, "departments")),
             ],
             "Chức vụ": [
                 ("Thêm", lambda: self.create_position(table)),
                 ("Sửa", lambda: self.edit_position(table)),
                 ("Ngừng", lambda: self.deactivate(table, "positions")),
+                ("Xóa", lambda: self.delete_record(table, "positions")),
             ],
             "Ca làm": [
                 ("Thêm", lambda: self.create_shift(table)),
                 ("Sửa", lambda: self.edit_shift(table)),
                 ("Ngừng", lambda: self.deactivate(table, "shifts")),
+                ("Xóa", lambda: self.delete_record(table, "shifts")),
+            ],
+            "Phân ca": [
+                ("Phân ca", lambda: self.assign_shift(table)),
+                ("Xóa", lambda: self.delete_record(table, "shift-assignments")),
+            ],
+            "Quản lý chấm công": [
+                ("Xóa", lambda: self.delete_record(table, "attendance")),
+            ],
+            "Duyệt điều chỉnh": [
+                ("Duyệt", lambda: self.review(table, "adjustment", True)),
+                ("Từ chối", lambda: self.review(table, "adjustment", False)),
+                ("Xóa", lambda: self.delete_record(table, "attendance-adjustments")),
+            ],
+            "Duyệt nghỉ phép": [
+                ("Duyệt", lambda: self.review(table, "leave", True)),
+                ("Từ chối", lambda: self.review(table, "leave", False)),
+                ("Xóa", lambda: self.delete_record(table, "leaves")),
             ],
             "Loại nghỉ phép": [
                 ("Thêm", lambda: self.create_leave_type(table)),
                 ("Sửa", lambda: self.edit_leave_type(table)),
                 ("Ngừng", lambda: self.deactivate(table, "leave-types")),
+                ("Xóa", lambda: self.delete_record(table, "leave-types")),
             ],
-            "Quỹ phép": [("Cấp/Cập nhật quỹ", lambda: self.set_leave_balance(table))],
+            "Quỹ phép": [
+                ("Cấp/Cập nhật quỹ", lambda: self.set_leave_balance(table)),
+                ("Xóa", lambda: self.delete_record(table, "leave-balances")),
+            ],
+            "Cảnh báo": [
+                ("Xác nhận", lambda: self.review(table, "alert", True)),
+                ("Bỏ cảnh báo", lambda: self.review(table, "alert", False)),
+                ("Xóa", lambda: self.delete_record(table, "security-alerts")),
+            ],
+            "Xác minh ngẫu nhiên": [
+                ("Xóa", lambda: self.delete_record(table, "random-checks")),
+            ],
             "Thiết bị": [
                 ("Phê duyệt", lambda: self.approve_device(table, True)),
                 ("Thu hồi", lambda: self.approve_device(table, False)),
+                ("Xóa", lambda: self.delete_record(table, "devices")),
             ],
             "Tài khoản": [
                 ("Đổi vai trò", lambda: self.change_role(table)),
                 ("Mở khóa", lambda: self.unlock_user(table)),
+                ("Xóa", lambda: self.delete_record(table, "users")),
             ],
             "Cấu hình hệ thống": [
                 ("Cập nhật", lambda: self.update_setting(table)),
                 ("Sao lưu", self.create_backup),
                 ("Khôi phục", self.restore_backup),
+                ("Xóa", lambda: self.delete_record(table, "settings", "key")),
             ],
         }
         if self.api.role == "ADMIN":
@@ -1437,6 +1484,32 @@ class MainWindow(QMainWindow):
             )
         except ApiError as exc:
             QMessageBox.warning(self, "Không thực hiện được", str(exc))
+
+    def delete_record(self, table, resource, identifier_field="id"):
+        row = self.selected(table)
+        if not row:
+            return
+        identifier = row.get(identifier_field)
+        if identifier is None:
+            QMessageBox.warning(self, "Không thể xóa", "Dữ liệu đã chọn không có mã hợp lệ.")
+            return
+        message = (
+            "Xóa bản ghi đã chọn?\n\n"
+            "Dữ liệu danh mục, nhân viên và tài khoản sẽ được ngừng hoạt động "
+            "để giữ lịch sử. Thiết bị và các bản ghi nghiệp vụ khác sẽ bị xóa vĩnh viễn."
+        )
+        if QMessageBox.question(self, "Xác nhận xóa", message) != QMessageBox.Yes:
+            return
+        try:
+            self.api.request(
+                "DELETE",
+                f"/api/v1/admin/records/{resource}",
+                params={"identifier": str(identifier)},
+            )
+            self.show_toast("Đã xử lý xóa bản ghi.")
+            self.load_table(table, self.endpoint_for(table.property("page_name")))
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không thể xóa", str(exc))
 
     def assign_shift(self, table):
         try:

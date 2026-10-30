@@ -56,6 +56,7 @@ admin_labels = {button.text() for button in admin_window.findChildren(QPushButto
 assert {
     "Thêm",
     "Sửa",
+    "Xóa",
     "Xuất Excel",
     "Sao lưu",
     "Khôi phục",
@@ -81,6 +82,9 @@ manager_user_window = MainWindow(ManagerApi())
 manager_admin_window = MainWindow(ManagerApi(), admin_only=True)
 assert manager_user_window.page_names == EMPLOYEE_PAGES
 assert manager_admin_window.page_names == MANAGER_PAGES
+manager_admin_labels = {button.text() for button in manager_admin_window.findChildren(QPushButton)}
+assert "Xóa" not in manager_admin_labels
+assert {"Phê duyệt", "Thu hồi"} <= manager_admin_labels
 manager_user_window.close()
 manager_admin_window.close()
 logout_events = []

@@ -89,6 +89,35 @@ from app.websocket.manager import manager
 
 settings = get_settings()
 
+ADMIN_REMOVABLE_MODELS = {
+    "employees": Employee,
+    "departments": Department,
+    "positions": Position,
+    "shifts": Shift,
+    "shift-assignments": ShiftAssignment,
+    "attendance": AttendanceRecord,
+    "attendance-adjustments": AttendanceAdjustment,
+    "leaves": LeaveRequest,
+    "leave-types": LeaveType,
+    "leave-balances": LeaveBalance,
+    "security-alerts": SecurityAlert,
+    "random-checks": RandomCheck,
+    "devices": Device,
+    "users": User,
+    "settings": SystemSetting,
+}
+
+# Dữ liệu danh mục/tài khoản phải được giữ lại để báo cáo lịch sử không
+# mất liên kết. Nút Xóa sẽ lưu trữ các bản ghi này thay vì xóa vật lý.
+ADMIN_ARCHIVED_RESOURCES = {
+    "employees",
+    "departments",
+    "positions",
+    "shifts",
+    "leave-types",
+    "users",
+}
+
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
@@ -108,7 +137,9 @@ def audit(
             user_id=user.id if user else None,
             action=action,
             entity_type=entity.__class__.__name__ if entity else None,
-            entity_id=str(getattr(entity, "id", "")) if entity else None,
+            entity_id=(
+                str(getattr(entity, "id", getattr(entity, "key", ""))) if entity else None
+            ),
             client_ip=ip,
             before_data=before,
             after_data=after,
@@ -796,11 +827,28 @@ def register_device(payload: DeviceIn, request: Request, db: Db, user: CurrentUs
 
 
 @organization_router.patch("/api/v1/devices/{device_id}/approve")
-def approve_device(device_id: int, approved: bool, db: Db, admin: Admin):
+def approve_device(
+    device_id: int,
+    approved: bool,
+    request: Request,
+    db: Db,
+    reviewer: Manager,
+):
     item = db.get(Device, device_id)
     if not item:
         raise HTTPException(404, "Không tìm thấy thiết bị")
+    enforce_employee_scope(db, reviewer, item.employee_id)
+    before = {"approved": item.approved}
     item.approved = approved
+    audit(
+        db,
+        "DEVICE_APPROVAL_CHANGED",
+        reviewer,
+        client_ip(request),
+        item,
+        before=before,
+        after={"approved": approved},
+    )
     db.commit()
     return {"id": item.id, "approved": item.approved}
 
@@ -1630,6 +1678,89 @@ def list_settings(db: Db, admin: Admin, pagination: Page):
         pagination,
         lambda x: {"key": x.key, "value": x.value, "description": x.description},
     )
+
+
+@admin_router.delete("/api/v1/admin/records/{resource}", status_code=204)
+def remove_admin_record(
+    resource: str,
+    identifier: str,
+    request: Request,
+    db: Db,
+    admin: Admin,
+):
+    """Remove an Admin-selected record while preserving required business history."""
+    model = ADMIN_REMOVABLE_MODELS.get(resource)
+    if model is None:
+        raise HTTPException(404, "Chức năng này không hỗ trợ xóa")
+
+    if model is SystemSetting:
+        item = db.get(model, identifier)
+    else:
+        try:
+            record_id = int(identifier)
+        except ValueError:
+            raise HTTPException(400, "Mã bản ghi không hợp lệ") from None
+        item = db.get(model, record_id)
+    if not item:
+        raise HTTPException(404, "Không tìm thấy dữ liệu cần xóa")
+
+    if isinstance(item, User):
+        if item.id == admin.id:
+            raise HTTPException(409, "Không thể xóa tài khoản Admin đang đăng nhập")
+        if item.active and item.role.name == RoleName.ADMIN:
+            active_admins = db.scalar(
+                select(func.count(User.id))
+                .join(Role)
+                .where(User.active.is_(True), Role.name == RoleName.ADMIN)
+            )
+            if active_admins <= 1:
+                raise HTTPException(409, "Hệ thống phải còn ít nhất một Admin hoạt động")
+    if isinstance(item, Employee) and item.id == admin.employee_id:
+        raise HTTPException(409, "Không thể xóa hồ sơ của Admin đang đăng nhập")
+    if isinstance(item, LeaveRequest) and item.status == RequestStatus.APPROVED:
+        raise HTTPException(409, "Hãy hủy đơn nghỉ đã duyệt trước khi xóa")
+    if isinstance(item, LeaveBalance) and item.used_days:
+        raise HTTPException(409, "Quỹ phép đã phát sinh ngày nghỉ nên không thể xóa")
+
+    archived = resource in ADMIN_ARCHIVED_RESOURCES
+    before = {"identifier": identifier}
+    if archived:
+        before["active"] = item.active
+        item.active = False
+        if isinstance(item, Employee):
+            linked_user = db.scalar(select(User).where(User.employee_id == item.id))
+            if linked_user:
+                linked_user.active = False
+                db.query(LoginSession).filter(
+                    LoginSession.user_id == linked_user.id,
+                    LoginSession.revoked_at.is_(None),
+                ).update({LoginSession.revoked_at: now_utc()})
+        elif isinstance(item, User):
+            db.query(LoginSession).filter(
+                LoginSession.user_id == item.id,
+                LoginSession.revoked_at.is_(None),
+            ).update({LoginSession.revoked_at: now_utc()})
+    else:
+        db.delete(item)
+
+    audit(
+        db,
+        "ADMIN_RECORD_ARCHIVED" if archived else "ADMIN_RECORD_DELETED",
+        admin,
+        client_ip(request),
+        item,
+        before=before,
+        after={"active": False} if archived else None,
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409,
+            "Dữ liệu đang được bản ghi khác sử dụng. Hãy xóa dữ liệu liên quan trước.",
+        ) from None
+    return Response(status_code=204)
 
 
 @admin_router.put("/api/v1/settings/{key}")
