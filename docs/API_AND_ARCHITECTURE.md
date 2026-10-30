@@ -30,6 +30,11 @@ OpenAPI tương tác có tại `/docs` khi Server chạy. Các nhóm đường d
 
 `POST /api/v1/leaves/{id}/cancel` cho phép hủy đơn đang chờ hoặc đơn tương lai đã duyệt; quỹ phép được hoàn lại trong cùng transaction. Các API danh sách nhận `page` và `page_size` (tối đa 200) và trả `{items, pagination}`; nếu không truyền `page`, Server vẫn trả danh sách thuần để tương thích Client cũ.
 
+AttendanceClient truyền `mine=true` cho dashboard, lịch phân ca, lịch sử chấm công và
+nghỉ phép. Vì vậy tài khoản Manager khi dùng cổng nhân viên chỉ nhìn thấy dữ liệu
+của chính mình; khi dùng AttendanceAdmin, RBAC Manager tiếp tục giới hạn dữ liệu theo
+phòng ban.
+
 Điểm vào `app/main.py` chỉ xuất ASGI app. Các route được đăng ký bằng bảy `APIRouter` theo domain trong `app/api/routers.py`, còn phần lắp ráp/lifespan nằm tại `app/api/application.py`.
 
 Mọi thời gian chấm công được tạo ở Server. Request check-in/out có khóa idempotency; unique constraint ở database là lớp bảo vệ thứ hai.

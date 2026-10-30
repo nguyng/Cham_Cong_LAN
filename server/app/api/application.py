@@ -716,9 +716,12 @@ def list_assignments(
     employee_id: int | None = None,
     start: date | None = None,
     end: date | None = None,
+    mine: bool = False,
 ):
     query = select(ShiftAssignment)
-    if user.role.name == RoleName.EMPLOYEE:
+    if mine:
+        query = query.where(ShiftAssignment.employee_id == ensure_employee(user).id)
+    elif user.role.name == RoleName.EMPLOYEE:
         target = employee_id or ensure_employee(user).id
         enforce_employee_scope(db, user, target)
         query = query.where(ShiftAssignment.employee_id == target)
@@ -901,9 +904,12 @@ def list_attendance(
     employee_id: int | None = None,
     start: date | None = None,
     end: date | None = None,
+    mine: bool = False,
 ):
     query = select(AttendanceRecord)
-    if user.role.name == RoleName.EMPLOYEE:
+    if mine:
+        query = query.where(AttendanceRecord.employee_id == ensure_employee(user).id)
+    elif user.role.name == RoleName.EMPLOYEE:
         target = employee_id or ensure_employee(user).id
         enforce_employee_scope(db, user, target)
         query = query.where(AttendanceRecord.employee_id == target)
@@ -1127,9 +1133,17 @@ async def create_leave(payload: LeaveRequestIn, db: Db, user: CurrentUser):
 
 
 @leave_router.get("/api/v1/leaves")
-def list_leaves(db: Db, user: CurrentUser, pagination: Page, status: RequestStatus | None = None):
+def list_leaves(
+    db: Db,
+    user: CurrentUser,
+    pagination: Page,
+    status: RequestStatus | None = None,
+    mine: bool = False,
+):
     query = select(LeaveRequest)
-    if user.role.name == RoleName.EMPLOYEE:
+    if mine:
+        query = query.where(LeaveRequest.employee_id == ensure_employee(user).id)
+    elif user.role.name == RoleName.EMPLOYEE:
         query = query.where(LeaveRequest.employee_id == user.employee_id)
     elif user.role.name == RoleName.MANAGER:
         query = query.join(Employee).where(
@@ -1554,17 +1568,18 @@ def export_pdf(
 
 
 @admin_router.get("/api/v1/dashboard")
-def dashboard(db: Db, user: CurrentUser):
+def dashboard(db: Db, user: CurrentUser, mine: bool = False):
     today = now_utc().date()
     attendance_scope = select(AttendanceRecord.id).join(Employee)
     leave_scope = select(LeaveRequest.id).join(Employee)
     alert_scope = select(SecurityAlert.id).join(Employee)
     employee_scope = select(Employee.id).where(Employee.active.is_(True))
-    if user.role.name == RoleName.EMPLOYEE:
-        attendance_scope = attendance_scope.where(AttendanceRecord.employee_id == user.employee_id)
-        leave_scope = leave_scope.where(LeaveRequest.employee_id == user.employee_id)
-        alert_scope = alert_scope.where(SecurityAlert.employee_id == user.employee_id)
-        employee_scope = employee_scope.where(Employee.id == user.employee_id)
+    if mine or user.role.name == RoleName.EMPLOYEE:
+        employee_id = ensure_employee(user).id
+        attendance_scope = attendance_scope.where(AttendanceRecord.employee_id == employee_id)
+        leave_scope = leave_scope.where(LeaveRequest.employee_id == employee_id)
+        alert_scope = alert_scope.where(SecurityAlert.employee_id == employee_id)
+        employee_scope = employee_scope.where(Employee.id == employee_id)
     elif user.role.name == RoleName.MANAGER:
         department_id = ensure_employee(user).department_id
         attendance_scope = attendance_scope.where(Employee.department_id == department_id)

@@ -12,6 +12,34 @@ QFrame#adminSidebar {
     border: 1px solid #183B5B;
     border-radius: 18px;
 }
+QScrollArea#navScroll, QScrollArea#navScroll QWidget#qt_scrollarea_viewport,
+QWidget#navContent {
+    background: transparent;
+    border: 0;
+}
+QFrame#sidebarFooter {
+    background: transparent;
+    border: 0;
+    border-top: 1px solid #24354C;
+}
+QScrollArea#navScroll QScrollBar:vertical {
+    background: transparent;
+    width: 7px;
+    margin: 3px 0;
+}
+QScrollArea#navScroll QScrollBar::handle:vertical {
+    background: #475569;
+    border-radius: 3px;
+    min-height: 34px;
+}
+QFrame#adminSidebar QScrollArea#navScroll QScrollBar::handle:vertical {
+    background: #0E7490;
+}
+QScrollArea#navScroll QScrollBar::handle:vertical:hover { background: #22D3EE; }
+QScrollArea#navScroll QScrollBar::add-line:vertical,
+QScrollArea#navScroll QScrollBar::sub-line:vertical { height: 0; }
+QScrollArea#navScroll QScrollBar::add-page:vertical,
+QScrollArea#navScroll QScrollBar::sub-page:vertical { background: transparent; }
 QFrame#sidebar QLabel, QFrame#adminSidebar QLabel {
     color: #E5E7EB;
     background: transparent;
@@ -22,6 +50,95 @@ QFrame#card, QFrame#adminCard, QFrame#emptyCard {
     border: 1px solid #E5EAF2;
     border-radius: 14px;
 }
+QFrame#attendanceHero {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #172554, stop:0.55 #1E3A8A, stop:1 #2563EB);
+    border: 1px solid #3B82F6;
+    border-radius: 20px;
+}
+QFrame#attendanceHero QLabel { color: #F8FAFC; background: transparent; }
+QLabel#attendanceEyebrow {
+    color: #93C5FD;
+    font-size: 9pt;
+    font-weight: 750;
+    letter-spacing: 2px;
+}
+QLabel#attendanceClock { font-size: 42pt; font-weight: 800; letter-spacing: 2px; }
+QLabel#attendanceDate { color: #CBD5E1; font-size: 11pt; }
+QLabel#attendanceStatus {
+    border-radius: 13px;
+    padding: 6px 16px;
+    font-size: 9pt;
+    font-weight: 800;
+}
+QLabel#attendanceStatus[state="idle"] { background: #334155; color: #E2E8F0; }
+QLabel#attendanceStatus[state="active"] { background: #166534; color: #DCFCE7; }
+QLabel#attendanceStatus[state="complete"] { background: #1D4ED8; color: #DBEAFE; }
+QFrame#attendanceActionCard, QFrame#attendanceSummaryCard {
+    background: #FFFFFF;
+    border: 1px solid #E5EAF2;
+    border-radius: 15px;
+}
+QLabel#sectionTitle { color: #172033; font-size: 14pt; font-weight: 750; }
+QPushButton[attendanceAction="checkin"] {
+    background: #16A34A;
+    border-radius: 12px;
+    font-size: 13pt;
+    font-weight: 800;
+}
+QPushButton[attendanceAction="checkin"]:hover { background: #15803D; }
+QPushButton[attendanceAction="checkout"] {
+    background: #EA580C;
+    border-radius: 12px;
+    font-size: 13pt;
+    font-weight: 800;
+}
+QPushButton[attendanceAction="checkout"]:hover { background: #C2410C; }
+QPushButton[attendanceAction="checkin"]:disabled,
+QPushButton[attendanceAction="checkout"]:disabled { background: #CBD5E1; color: #64748B; }
+QLabel#summaryTitle { color: #64748B; font-size: 9pt; font-weight: 650; }
+QLabel#summaryValue { color: #172033; font-size: 14pt; font-weight: 750; }
+QFrame#attendanceNotice {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 12px;
+}
+QLabel#noticeIcon {
+    color: #FFFFFF;
+    background: #2563EB;
+    border-radius: 10px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    qproperty-alignment: AlignCenter;
+    font-weight: 800;
+}
+QLabel#noticeText { color: #1E3A5F; }
+QFrame#attendanceGuide {
+    background: #FFFFFF;
+    border: 1px solid #E5EAF2;
+    border-radius: 15px;
+}
+QFrame#attendanceStep {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 11px;
+}
+QLabel#stepNumber {
+    color: #2563EB;
+    background: #DBEAFE;
+    border-radius: 17px;
+    min-width: 34px;
+    min-height: 34px;
+    max-width: 34px;
+    max-height: 34px;
+    qproperty-alignment: AlignCenter;
+    font-size: 9pt;
+    font-weight: 800;
+}
+QLabel#stepTitle { color: #172033; font-weight: 750; }
+QLabel#stepText { color: #64748B; font-size: 9pt; }
 QFrame#adminCard { border-top: 3px solid #0891B2; }
 QFrame#emptyCard { background: #F8FAFC; border-style: dashed; }
 QPushButton {

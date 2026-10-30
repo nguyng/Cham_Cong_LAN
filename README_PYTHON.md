@@ -28,6 +28,10 @@ $env:PYTHONPATH = "$PWD\client"
 .\.venv\Scripts\python.exe .\admin\main.py
 ```
 
+`AttendanceClient` luôn là cổng nhân viên. Khi tài khoản `manage` đăng nhập tại đây,
+giao diện và dữ liệu chỉ hiển thị phần cá nhân của chính Manager. Các chức năng quản lý
+phòng ban chỉ xuất hiện khi đăng nhập bằng `AttendanceAdmin`.
+
 ## Dữ liệu kiểm thử có sẵn
 
 Database của bản portable đã được nạp 5 mẫu cho từng nhóm chức năng. Các tài khoản thử:

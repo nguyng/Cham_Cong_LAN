@@ -35,6 +35,28 @@ def test_role_authorization(client, employee_headers, admin_headers):
     )
 
 
+def test_manager_employee_portal_scope_only_returns_own_data(client, manager_headers):
+    department_schedule = client.get(
+        "/api/v1/shift-assignments", params={"page": 1}, headers=manager_headers
+    )
+    own_schedule = client.get(
+        "/api/v1/shift-assignments",
+        params={"mine": True, "page": 1},
+        headers=manager_headers,
+    )
+    department_dashboard = client.get("/api/v1/dashboard", headers=manager_headers)
+    own_dashboard = client.get(
+        "/api/v1/dashboard", params={"mine": True}, headers=manager_headers
+    )
+
+    assert department_schedule.status_code == 200
+    assert own_schedule.status_code == 200
+    assert department_schedule.json()["pagination"]["total"] == 1
+    assert own_schedule.json()["pagination"]["total"] == 0
+    assert department_dashboard.json()["total_employees"] == 3
+    assert own_dashboard.json()["total_employees"] == 1
+
+
 def test_change_password_revokes_sessions(client, employee_headers):
     response = client.post(
         "/api/v1/auth/change-password",

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -388,6 +389,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.api = api
         self.admin_only = admin_only
+        self.employee_portal = not admin_only
         self.dark = False
         self.table_rows = {}
         self.table_filters = {}
@@ -405,45 +407,67 @@ class MainWindow(QMainWindow):
         self.resize(1360, 820)
         shell = QWidget()
         sidebar = QFrame(objectName="adminSidebar" if admin_only else "sidebar")
-        root, nav = QHBoxLayout(shell), QVBoxLayout(sidebar)
+        root, sidebar_box = QHBoxLayout(shell), QVBoxLayout(sidebar)
         root.setContentsMargins(14, 14, 14, 14)
         sidebar.setFixedWidth(260 if admin_only else 230)
-        nav.setContentsMargins(16, 22, 16, 22)
+        sidebar_box.setContentsMargins(16, 20, 10, 16)
+        sidebar_box.setSpacing(10)
         brand = QLabel("ADMIN\nCONTROL CENTER" if admin_only else "LAN\nATTENDANCE")
         brand.setStyleSheet("font-size: 17pt; font-weight: 800; letter-spacing: 1px;")
-        nav.addWidget(brand)
-        role = QLabel("QUẢN TRỊ HỆ THỐNG" if api.role == "ADMIN" else "QUẢN LÝ PHÒNG BAN")
+        sidebar_box.addWidget(brand)
+        if self.employee_portal:
+            role_text = "CHẾ ĐỘ NHÂN VIÊN"
+        elif api.role == "ADMIN":
+            role_text = "QUẢN TRỊ HỆ THỐNG"
+        else:
+            role_text = "QUẢN LÝ PHÒNG BAN"
+        role = QLabel(role_text)
         role.setObjectName("roleBadge")
         role.setAlignment(Qt.AlignCenter)
-        nav.addWidget(role)
-        nav.addSpacing(8)
+        sidebar_box.addWidget(role)
+
+        self.nav_scroll = QScrollArea(objectName="navScroll")
+        self.nav_scroll.setWidgetResizable(True)
+        self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.nav_scroll.setFrameShape(QFrame.NoFrame)
+        nav_content = QWidget(objectName="navContent")
+        nav = QVBoxLayout(nav_content)
+        nav.setContentsMargins(0, 4, 5, 4)
+        nav.setSpacing(5)
         self.stack = QStackedWidget()
         management_pages = ADMIN_PAGES if api.role == "ADMIN" else MANAGER_PAGES
-        self.page_names = (
-            management_pages
-            if admin_only
-            else EMPLOYEE_PAGES + (management_pages if api.role in ("ADMIN", "MANAGER") else [])
-        )
+        self.page_names = management_pages if admin_only else EMPLOYEE_PAGES
         for name in self.page_names:
             label = f"{PAGE_ICONS.get(name, '•')}   {name}"
             button, index = QPushButton(label), self.stack.count()
             button.setProperty("nav", True)
             button.setCheckable(True)
+            button.setMinimumHeight(40)
             button.clicked.connect(lambda _checked=False, i=index: self.show_page(i))
             nav.addWidget(button)
             self.nav_buttons.append(button)
             self.stack.addWidget(self.make_page(name))
         nav.addStretch()
+        self.nav_scroll.setWidget(nav_content)
+        sidebar_box.addWidget(self.nav_scroll, 1)
+
+        footer = QFrame(objectName="sidebarFooter")
+        footer_box = QVBoxLayout(footer)
+        footer_box.setContentsMargins(0, 8, 6, 0)
+        footer_box.setSpacing(7)
         theme = QPushButton("Sáng / Tối")
         theme.setProperty("secondary", True)
         theme.clicked.connect(self.toggle_theme)
-        nav.addWidget(theme)
+        footer_box.addWidget(theme)
         logout = QPushButton("Đăng xuất")
         logout.setProperty("danger", True)
         logout.clicked.connect(self.logout)
-        nav.addWidget(logout)
+        footer_box.addWidget(logout)
         self.connection = QLabel("● Đang kết nối")
-        nav.addWidget(self.connection)
+        self.connection.setWordWrap(True)
+        footer_box.addWidget(self.connection)
+        sidebar_box.addWidget(footer)
         root.addWidget(sidebar)
         root.addWidget(self.stack, 1)
         self.setCentralWidget(shell)
@@ -515,19 +539,128 @@ class MainWindow(QMainWindow):
             layout.addWidget(chart_view)
             return page
         if name == "Chấm công":
-            clock, buttons = QLabel(objectName="metric"), QHBoxLayout()
-            clock.setAlignment(Qt.AlignCenter)
-            timer = QTimer(page)
-            timer.timeout.connect(
-                lambda: clock.setText(datetime.now().strftime("%d/%m/%Y  %H:%M:%S"))
+            hero = QFrame(objectName="attendanceHero")
+            hero_box = QVBoxLayout(hero)
+            hero_box.setContentsMargins(32, 26, 32, 26)
+            hero_box.setSpacing(4)
+            eyebrow = QLabel("THỜI GIAN MÁY CHỦ", objectName="attendanceEyebrow")
+            eyebrow.setAlignment(Qt.AlignCenter)
+            self.attendance_clock = QLabel(objectName="attendanceClock")
+            self.attendance_clock.setAlignment(Qt.AlignCenter)
+            self.attendance_date = QLabel(objectName="attendanceDate")
+            self.attendance_date.setAlignment(Qt.AlignCenter)
+            self.attendance_status = QLabel("CHƯA CHECK-IN", objectName="attendanceStatus")
+            self.attendance_status.setAlignment(Qt.AlignCenter)
+            hero_box.addWidget(eyebrow)
+            hero_box.addWidget(self.attendance_clock)
+            hero_box.addWidget(self.attendance_date)
+            hero_box.addSpacing(10)
+            hero_box.addWidget(self.attendance_status, 0, Qt.AlignCenter)
+            layout.addWidget(hero)
+
+            action_card = QFrame(objectName="attendanceActionCard")
+            action_box = QVBoxLayout(action_card)
+            action_box.setContentsMargins(24, 20, 24, 20)
+            action_box.setSpacing(14)
+            action_box.addWidget(QLabel("Ghi nhận thời gian làm việc", objectName="sectionTitle"))
+            action_box.addWidget(
+                QLabel(
+                    "Chọn thao tác phù hợp. Thời gian được lấy trực tiếp từ Server.",
+                    objectName="subtitle",
+                )
             )
+            buttons = QHBoxLayout()
+            buttons.setSpacing(14)
+            self.check_in_button = QPushButton("▶  CHECK-IN")
+            self.check_in_button.setProperty("attendanceAction", "checkin")
+            self.check_in_button.setMinimumHeight(58)
+            self.check_in_button.clicked.connect(
+                lambda _checked=False: self.do_attendance("check-in")
+            )
+            self.check_out_button = QPushButton("■  CHECK-OUT")
+            self.check_out_button.setProperty("attendanceAction", "checkout")
+            self.check_out_button.setMinimumHeight(58)
+            self.check_out_button.clicked.connect(
+                lambda _checked=False: self.do_attendance("check-out")
+            )
+            buttons.addWidget(self.check_in_button)
+            buttons.addWidget(self.check_out_button)
+            action_box.addLayout(buttons)
+            layout.addWidget(action_card)
+
+            summary = QGridLayout()
+            summary.setHorizontalSpacing(14)
+            self.attendance_summary = {}
+            for column, (key, title, icon) in enumerate(
+                (
+                    ("shift", "Ca làm hôm nay", "◷"),
+                    ("check_in", "Giờ vào", "→"),
+                    ("check_out", "Giờ ra", "←"),
+                    ("worked", "Thời gian làm", "◴"),
+                )
+            ):
+                card = QFrame(objectName="attendanceSummaryCard")
+                card_box = QVBoxLayout(card)
+                card_box.setContentsMargins(18, 16, 18, 16)
+                card_box.addWidget(QLabel(f"{icon}  {title}", objectName="summaryTitle"))
+                value = QLabel("—", objectName="summaryValue")
+                card_box.addWidget(value)
+                self.attendance_summary[key] = value
+                summary.addWidget(card, 0, column)
+            layout.addLayout(summary)
+
+            notice = QFrame(objectName="attendanceNotice")
+            notice_box = QHBoxLayout(notice)
+            notice_box.setContentsMargins(18, 12, 18, 12)
+            notice_icon = QLabel("✓", objectName="noticeIcon")
+            self.attendance_notice = QLabel(
+                "Thiết bị và kết nối LAN sẽ được xác minh khi chấm công.",
+                objectName="noticeText",
+            )
+            self.attendance_notice.setWordWrap(True)
+            notice_box.addWidget(notice_icon)
+            notice_box.addWidget(self.attendance_notice, 1)
+            layout.addWidget(notice)
+
+            guide = QFrame(objectName="attendanceGuide")
+            guide_box = QVBoxLayout(guide)
+            guide_box.setContentsMargins(20, 16, 20, 16)
+            guide_box.addWidget(QLabel("Quy trình chấm công an toàn", objectName="sectionTitle"))
+            steps = QHBoxLayout()
+            steps.setSpacing(12)
+            for number, title, description in (
+                ("01", "Kiểm tra ca", "Xác nhận ca làm hôm nay trước khi bắt đầu."),
+                ("02", "Ghi nhận giờ vào", "CHECK-IN một lần khi bạn sẵn sàng làm việc."),
+                ("03", "Kết thúc ca", "CHECK-OUT trước khi rời khỏi thiết bị đã đăng ký."),
+            ):
+                step = QFrame(objectName="attendanceStep")
+                step_box = QHBoxLayout(step)
+                step_box.setContentsMargins(14, 12, 14, 12)
+                badge = QLabel(number, objectName="stepNumber")
+                text_box = QVBoxLayout()
+                text_box.addWidget(QLabel(title, objectName="stepTitle"))
+                detail = QLabel(description, objectName="stepText")
+                detail.setWordWrap(True)
+                text_box.addWidget(detail)
+                step_box.addWidget(badge)
+                step_box.addLayout(text_box, 1)
+                steps.addWidget(step, 1)
+            guide_box.addLayout(steps)
+            layout.addWidget(guide)
+            layout.addStretch()
+
+            def update_clock():
+                now = datetime.now()
+                self.attendance_clock.setText(now.strftime("%H:%M:%S"))
+                self.attendance_date.setText(
+                    f"{self.vietnamese_weekday(now.weekday())}, {now.strftime('%d/%m/%Y')}"
+                )
+
+            timer = QTimer(page)
+            timer.timeout.connect(update_clock)
+            update_clock()
             timer.start(1000)
-            for label, action in (("CHECK-IN", "check-in"), ("CHECK-OUT", "check-out")):
-                button = QPushButton(label)
-                button.clicked.connect(lambda _=False, a=action: self.do_attendance(a))
-                buttons.addWidget(button)
-            layout.addWidget(clock)
-            layout.addLayout(buttons)
+            QTimer.singleShot(120, self.refresh_attendance_panel)
             return page
         toolbar, controls = QFrame(objectName="toolbar"), QHBoxLayout()
         toolbar.setLayout(controls)
@@ -868,6 +1001,12 @@ class MainWindow(QMainWindow):
     def load_table(self, table, endpoint):
         path, _, query = endpoint.partition("?")
         params = dict(part.split("=", 1) for part in query.split("&") if part)
+        if self.employee_portal and path in (
+            "/api/v1/attendance",
+            "/api/v1/shift-assignments",
+            "/api/v1/leaves",
+        ):
+            params["mine"] = True
         for key, widget in self.table_filters.get(table, {}).items():
             if isinstance(widget, QDateEdit):
                 value = widget.date().toString("yyyy-MM-dd")
@@ -1605,7 +1744,8 @@ class MainWindow(QMainWindow):
     def refresh_dashboard(self):
         if hasattr(self, "metrics") or hasattr(self, "admin_metrics"):
             try:
-                data = self.api.request("GET", "/api/v1/dashboard")
+                params = {"mine": True} if self.employee_portal else None
+                data = self.api.request("GET", "/api/v1/dashboard", params=params)
                 for key, label in getattr(self, "metrics", {}).items():
                     label.setText(str(data.get(key, 0)))
                 for key, label in getattr(self, "admin_metrics", {}).items():
@@ -1616,12 +1756,100 @@ class MainWindow(QMainWindow):
             except ApiError:
                 self.connection_state(False)
 
+    @staticmethod
+    def vietnamese_weekday(weekday):
+        return (
+            "Thứ Hai",
+            "Thứ Ba",
+            "Thứ Tư",
+            "Thứ Năm",
+            "Thứ Sáu",
+            "Thứ Bảy",
+            "Chủ Nhật",
+        )[weekday]
+
+    @staticmethod
+    def display_time(value):
+        if not value:
+            return "Chưa ghi nhận"
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed.astimezone().strftime("%H:%M")
+        except (TypeError, ValueError):
+            return str(value)
+
+    def refresh_attendance_panel(self):
+        if not hasattr(self, "attendance_summary"):
+            return
+        today = datetime.now().strftime("%Y-%m-%d")
+        params = {"mine": True, "start": today, "end": today, "page": 1, "page_size": 5}
+        try:
+            attendance_data = self.api.request("GET", "/api/v1/attendance", params=params)
+            schedule_data = self.api.request(
+                "GET", "/api/v1/shift-assignments", params=params
+            )
+        except ApiError as exc:
+            self.attendance_notice.setText(f"Chưa thể tải trạng thái chấm công: {exc}")
+            return
+
+        attendance_rows = (
+            attendance_data.get("items", []) if isinstance(attendance_data, dict) else []
+        )
+        schedule_rows = schedule_data.get("items", []) if isinstance(schedule_data, dict) else []
+        record = attendance_rows[0] if attendance_rows else None
+        assignment = schedule_rows[0] if schedule_rows else None
+        self.attendance_summary["shift"].setText(
+            assignment.get("shift_name", "Chưa có lịch làm")
+            if assignment
+            else "Chưa có lịch làm"
+        )
+        self.attendance_summary["check_in"].setText(
+            self.display_time(record.get("check_in_at")) if record else "Chưa ghi nhận"
+        )
+        self.attendance_summary["check_out"].setText(
+            self.display_time(record.get("check_out_at")) if record else "Chưa ghi nhận"
+        )
+        worked_minutes = int(record.get("worked_minutes") or 0) if record else 0
+        self.attendance_summary["worked"].setText(
+            f"{worked_minutes // 60} giờ {worked_minutes % 60:02d} phút" if worked_minutes else "—"
+        )
+
+        if not record:
+            status_text, state = "CHƯA CHECK-IN", "idle"
+            self.check_in_button.setEnabled(bool(assignment))
+            self.check_out_button.setEnabled(False)
+            notice = (
+                "Bạn chưa bắt đầu ca làm hôm nay."
+                if assignment
+                else "Hôm nay bạn chưa được phân ca."
+            )
+        elif not record.get("check_out_at"):
+            status_text, state = "ĐANG TRONG CA", "active"
+            self.check_in_button.setEnabled(False)
+            self.check_out_button.setEnabled(True)
+            notice = "Ca làm đang được ghi nhận. Hãy CHECK-OUT khi kết thúc công việc."
+        else:
+            status_text, state = "ĐÃ HOÀN THÀNH", "complete"
+            self.check_in_button.setEnabled(False)
+            self.check_out_button.setEnabled(False)
+            status = STATUS_TEXT.get(record.get("status"), record.get("status", ""))
+            notice = f"Ca làm hôm nay đã hoàn thành — {status}."
+        self.attendance_status.setText(status_text)
+        self.attendance_status.setProperty("state", state)
+        self.attendance_status.style().unpolish(self.attendance_status)
+        self.attendance_status.style().polish(self.attendance_status)
+        self.attendance_notice.setText(notice)
+
     def do_attendance(self, action):
         try:
             data = self.api.attendance(action)
             self.show_toast(
                 f"Chấm công thành công — {STATUS_TEXT.get(data['status'], data['status'])}"
             )
+            self.refresh_attendance_panel()
+            self.refresh_dashboard()
         except ApiError as exc:
             QMessageBox.warning(self, "Không thể chấm công", str(exc))
 
@@ -1635,6 +1863,8 @@ class MainWindow(QMainWindow):
             "security_alerts_updated",
         ):
             self.refresh_dashboard()
+            if payload.get("type") == "attendance_changed":
+                self.refresh_attendance_panel()
 
     def show_random_check(self, payload):
         try:
