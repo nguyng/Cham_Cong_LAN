@@ -31,6 +31,55 @@ def test_leave_request_and_approval(client, employee_headers, manager_headers):
         assert float(db.query(LeaveBalance).one().used_days) > 0
 
 
+def test_leave_references_and_used_balance_are_validated(
+    client, employee_headers, admin_headers
+):
+    invalid_type = client.post(
+        "/api/v1/leaves",
+        json={
+            "leave_type_id": 999999,
+            "start_date": str(date.today() + timedelta(days=7)),
+            "end_date": str(date.today() + timedelta(days=8)),
+            "reason": "Kiểm tra loại nghỉ không tồn tại",
+        },
+        headers=employee_headers,
+    )
+    assert invalid_type.status_code == 409
+
+    with SessionLocal.begin() as db:
+        balance = db.query(LeaveBalance).one()
+        balance.used_days = 2
+        payload = {
+            "employee_id": balance.employee_id,
+            "leave_type_id": balance.leave_type_id,
+            "year": balance.year,
+            "allocated_days": 1,
+        }
+    reduced = client.put("/api/v1/leave-balances", json=payload, headers=admin_headers)
+    assert reduced.status_code == 409
+
+
+def test_shift_assignment_rejects_invalid_or_empty_schedule(client, manager_headers):
+    with SessionLocal() as db:
+        employee_id = db.query(Employee).filter_by(employee_code="NV001").one().id
+    payload = {
+        "employee_id": employee_id,
+        "shift_id": 999999,
+        "start_date": str(date.today()),
+        "end_date": str(date.today()),
+        "weekdays": [date.today().weekday()],
+    }
+    assert (
+        client.post("/api/v1/shift-assignments", json=payload, headers=manager_headers).status_code
+        == 409
+    )
+    payload["weekdays"] = []
+    assert (
+        client.post("/api/v1/shift-assignments", json=payload, headers=manager_headers).status_code
+        == 422
+    )
+
+
 def test_random_check_response_and_alert_review(client, employee_headers, manager_headers):
     with SessionLocal() as db:
         employee_id = db.query(Employee).filter_by(employee_code="NV001").one().id
@@ -56,15 +105,23 @@ def test_random_check_response_and_alert_review(client, employee_headers, manage
     assert response.json()["result"] == "VERIFIED"
 
 
-def test_excel_pdf_exports(client, employee_headers, manager_headers):
+def test_excel_pdf_exports(
+    client, employee_headers, manager_headers, approved_employee_device
+):
     client.post(
         "/api/v1/attendance/check-in",
-        json={"device_fingerprint": None, "idempotency_key": "report-checkin"},
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "report-checkin",
+        },
         headers=employee_headers,
     )
     client.post(
         "/api/v1/attendance/check-out",
-        json={"device_fingerprint": None, "idempotency_key": "report-checkout"},
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "report-checkout",
+        },
         headers=employee_headers,
     )
     params = {"start": str(date.today()), "end": str(date.today())}

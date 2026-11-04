@@ -5,7 +5,7 @@ from PySide6.QtCore import QEventLoop, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QSplashScreen
 
-from app.network.api import ApiClient
+from app.network.api import ApiClient, ApiError
 from app.ui.login import LoginDialog
 from app.ui.main_window import MainWindow
 from app.ui.style import ADMIN_LIGHT, LIGHT
@@ -74,12 +74,15 @@ def main(admin_only: bool = False):
         if admin_only and api.role not in ("ADMIN", "MANAGER"):
             from PySide6.QtWidgets import QMessageBox
 
+            try:
+                api.request("POST", "/api/v1/auth/logout")
+            except ApiError:
+                # The local session must still be cleared when the Server disconnects.
+                pass
             QMessageBox.critical(
                 None, "Từ chối truy cập", "Ứng dụng quản trị yêu cầu quyền Manager hoặc Admin."
             )
-            api.token = None
-            api.role = None
-            api.employee_id = None
+            api.clear_session()
             QTimer.singleShot(0, show_login)
             return
 

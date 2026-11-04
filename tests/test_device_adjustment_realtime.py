@@ -1,7 +1,14 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from app.database.session import SessionLocal
-from app.models.entities import Department, Device, Employee, Notification
+from app.models.entities import (
+    AttendanceRecord,
+    AttendanceStatus,
+    Department,
+    Device,
+    Employee,
+    Notification,
+)
 
 
 def test_device_must_be_approved_before_attendance(client, employee_headers, admin_headers):
@@ -81,15 +88,35 @@ def test_manager_can_approve_device_only_in_own_department(
     assert denied.status_code == 403
 
 
-def test_adjustment_request_list_and_review(client, employee_headers, manager_headers):
+def test_same_workstation_can_be_registered_for_multiple_accounts(
+    client, employee_headers, manager_headers
+):
+    payload = {"fingerprint": "shared-workstation-fingerprint", "device_name": "Máy dùng chung"}
+    employee_device = client.post("/api/v1/devices", json=payload, headers=employee_headers)
+    manager_device = client.post("/api/v1/devices", json=payload, headers=manager_headers)
+    repeated = client.post("/api/v1/devices", json=payload, headers=employee_headers)
+
+    assert employee_device.status_code == 201
+    assert manager_device.status_code == 201
+    assert manager_device.json()["id"] != employee_device.json()["id"]
+    assert repeated.status_code == 201
+    assert repeated.json()["id"] == employee_device.json()["id"]
+
+
+def test_adjustment_request_list_and_review(
+    client, employee_headers, manager_headers, approved_employee_device
+):
     check_in = client.post(
         "/api/v1/attendance/check-in",
-        json={"device_fingerprint": None, "idempotency_key": "adjustment-checkin"},
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "adjustment-checkin",
+        },
         headers=employee_headers,
     )
     assert check_in.status_code == 201
     attendance_id = check_in.json()["id"]
-    proposed = datetime.now(UTC) - timedelta(minutes=10)
+    proposed = datetime.combine(date.today(), time.min, tzinfo=UTC)
     requested = client.post(
         "/api/v1/attendance/adjustments",
         json={
@@ -112,9 +139,59 @@ def test_adjustment_request_list_and_review(client, employee_headers, manager_he
     )
     assert reviewed.status_code == 200
     assert reviewed.json()["status"] == "APPROVED"
+    with SessionLocal() as db:
+        attendance_record = db.get(AttendanceRecord, attendance_id)
+        assert attendance_record.late_minutes == 0
+        assert attendance_record.status == AttendanceStatus.OPEN
 
 
-def test_websocket_receives_attendance_broadcast(client):
+def test_adjustment_rejects_invalid_time_order(
+    client, employee_headers, manager_headers, approved_employee_device
+):
+    check_in = client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "invalid-adjustment-checkin",
+        },
+        headers=employee_headers,
+    )
+    assert check_in.status_code == 201
+    check_in_at = datetime.fromisoformat(check_in.json()["check_in_at"])
+    before_check_in = check_in_at - timedelta(hours=1)
+
+    malformed = client.post(
+        "/api/v1/attendance/adjustments",
+        json={
+            "attendance_id": check_in.json()["id"],
+            "proposed_check_in": check_in_at.isoformat(),
+            "proposed_check_out": before_check_in.isoformat(),
+            "reason": "Kiểm tra thứ tự thời gian không hợp lệ",
+        },
+        headers=employee_headers,
+    )
+    assert malformed.status_code == 422
+
+    requested = client.post(
+        "/api/v1/attendance/adjustments",
+        json={
+            "attendance_id": check_in.json()["id"],
+            "proposed_check_in": None,
+            "proposed_check_out": before_check_in.isoformat(),
+            "reason": "Kiểm tra lúc duyệt điều chỉnh",
+        },
+        headers=employee_headers,
+    )
+    assert requested.status_code == 201
+    reviewed = client.post(
+        f"/api/v1/attendance/adjustments/{requested.json()['id']}/review",
+        json={"approve": True, "note": "Không chấp nhận giờ sai"},
+        headers=manager_headers,
+    )
+    assert reviewed.status_code == 409
+
+
+def test_websocket_receives_attendance_broadcast(client, approved_employee_device):
     login = client.post(
         "/api/v1/auth/login",
         json={"username": "employee", "password": "EmployeePass123!"},
@@ -124,7 +201,10 @@ def test_websocket_receives_attendance_broadcast(client):
         assert socket.receive_json()["type"] == "connected"
         response = client.post(
             "/api/v1/attendance/check-in",
-            json={"device_fingerprint": None, "idempotency_key": "websocket-checkin"},
+            json={
+                "device_fingerprint": approved_employee_device,
+                "idempotency_key": "websocket-checkin",
+            },
             headers=headers,
         )
         assert response.status_code == 201

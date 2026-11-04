@@ -2,8 +2,8 @@
 Tạo lại Module_ChamCong_LAN.docx đồng bộ với Module_ChamCong_LAN.md
 """
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 
 doc = Document()
 
@@ -102,7 +102,8 @@ separator()
 # Bảng ký hiệu
 p_ky = doc.add_paragraph()
 r_ky = p_ky.add_run('Bảng ký hiệu công nghệ:')
-r_ky.bold = True; r_ky.font.name = 'Times New Roman'
+r_ky.bold = True
+r_ky.font.name = 'Times New Roman'
 
 tbl_ky = doc.add_table(rows=4, cols=2)
 tbl_ky.style = 'Table Grid'
@@ -268,7 +269,8 @@ for i, h_text in enumerate(headers):
     tbl.rows[0].cells[i].text = h_text
     for pr in tbl.rows[0].cells[i].paragraphs:
         for rr in pr.runs:
-            rr.bold = True; rr.font.name = 'Times New Roman'
+            rr.bold = True
+            rr.font.name = 'Times New Roman'
 
 rows_data = [
     ('Module 1 — Chấm Công',   '🐍 Python FastAPI',       'Member 2',     '🌟 Giới hạn IP, Random Check, Gắn cờ bất thường'),
@@ -368,7 +370,9 @@ for i, h_text in enumerate(headers2):
     tbl2.rows[0].cells[i].text = h_text
     for pr in tbl2.rows[0].cells[i].paragraphs:
         for rr in pr.runs:
-            rr.bold = True; rr.font.name = 'Times New Roman'; rr.font.size = Pt(11)
+            rr.bold = True
+            rr.font.name = 'Times New Roman'
+            rr.font.size = Pt(11)
 
 rows2 = [
     ('Điểm danh', 'Máy vân tay / Sổ sách',            'Click trên máy tính (Check IP LAN)',       'Nhanh chóng, không ùn tắc, 0đ chi phí máy móc'),

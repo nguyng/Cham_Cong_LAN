@@ -71,19 +71,28 @@ class ApiClient:
             return None
         return response.json()
 
-    def login(self, username: str, password: str):
+    def clear_session(self):
+        self.token = None
+        self.role = None
+        self.employee_id = None
+        self.device_registration_pending = False
+
+    def login(self, username: str, password: str, register_device: bool = True):
+        self.clear_session()
         data = self.request(
             "POST",
             "/api/v1/auth/login",
             json={
                 "username": username,
                 "password": password,
-                "device_fingerprint": self.device_fingerprint,
+                "device_fingerprint": self.device_fingerprint if register_device else None,
             },
         )
         self.token = data["access_token"]
         self.role = data["role"]
         self.employee_id = data["employee_id"]
+        if not register_device:
+            return data
         try:
             registered = self.request(
                 "POST",
@@ -91,13 +100,13 @@ class ApiClient:
                 json={"fingerprint": self.device_fingerprint, "device_name": socket.gethostname()},
             )
             self.device_registration_pending = not registered["approved"]
-        except ApiError as exc:
-            if "đã được đăng ký" not in str(exc):
-                raise
-            devices = self.request("GET", "/api/v1/devices/me")
-            self.device_registration_pending = not any(
-                item["approved"] and item["active"] for item in devices
-            )
+        except ApiError:
+            try:
+                self.request("POST", "/api/v1/auth/logout")
+            except ApiError:
+                pass
+            self.clear_session()
+            raise
         return data
 
     def attendance(self, action: str):

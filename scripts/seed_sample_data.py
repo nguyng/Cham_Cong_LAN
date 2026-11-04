@@ -435,9 +435,11 @@ def seed(database_path: Path):
                 upsert(
                     db,
                     Device,
-                    {"fingerprint_hash": fingerprint_hash},
                     {
                         "employee_id": employee.id,
+                        "fingerprint_hash": fingerprint_hash,
+                    },
+                    {
                         "device_name": f"PC-{index + 1:02d}",
                         "approved": index != 4,
                         "active": True,

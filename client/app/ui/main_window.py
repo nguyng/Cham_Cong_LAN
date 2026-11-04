@@ -2040,9 +2040,7 @@ class MainWindow(QMainWindow):
                 != QMessageBox.Yes
             ):
                 return
-        self.api.token = None
-        self.api.role = None
-        self.api.employee_id = None
+        self.api.clear_session()
         self._logout_requested = True
         self._finish_session(logged_out=True)
 

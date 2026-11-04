@@ -69,7 +69,11 @@ class LoginDialog(QDialog):
 
     def submit(self):
         try:
-            self.api.login(self.username.text().strip(), self.password.text())
+            self.api.login(
+                self.username.text().strip(),
+                self.password.text(),
+                register_device=not self.admin_only,
+            )
         except ApiError as exc:
             QMessageBox.critical(self, "Đăng nhập thất bại", str(exc))
             return

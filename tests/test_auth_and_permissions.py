@@ -1,3 +1,5 @@
+from app.database.session import SessionLocal
+from app.models.entities import User
 from conftest import login
 
 
@@ -65,3 +67,39 @@ def test_change_password_revokes_sessions(client, employee_headers):
     )
     assert response.status_code == 204
     assert client.get("/api/v1/me", headers=employee_headers).status_code == 401
+
+
+def test_current_admin_cannot_remove_own_admin_access(client, admin_headers):
+    with SessionLocal() as db:
+        admin = db.query(User).filter_by(username="admin").one()
+        admin_id = admin.id
+        employee_id = admin.employee_id
+
+    demote = client.patch(
+        f"/api/v1/users/{admin_id}/role",
+        params={"role": "EMPLOYEE"},
+        headers=admin_headers,
+    )
+    deactivate = client.patch(
+        f"/api/v1/employees/{employee_id}/active",
+        params={"active": False},
+        headers=admin_headers,
+    )
+
+    assert demote.status_code == 409
+    assert deactivate.status_code == 409
+    assert client.get("/api/v1/me", headers=admin_headers).status_code == 200
+
+
+def test_role_change_revokes_target_sessions(client, admin_headers, manager_headers):
+    with SessionLocal() as db:
+        manager_id = db.query(User).filter_by(username="manager").one().id
+
+    changed = client.patch(
+        f"/api/v1/users/{manager_id}/role",
+        params={"role": "EMPLOYEE"},
+        headers=admin_headers,
+    )
+
+    assert changed.status_code == 200
+    assert client.get("/api/v1/me", headers=manager_headers).status_code == 401

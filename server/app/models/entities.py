@@ -237,9 +237,14 @@ class LeaveRequest(Base, TimestampMixin):
 
 class Device(Base, TimestampMixin):
     __tablename__ = "devices"
+    __table_args__ = (
+        UniqueConstraint(
+            "employee_id", "fingerprint_hash", name="uq_device_employee_fingerprint"
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
-    fingerprint_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    fingerprint_hash: Mapped[str] = mapped_column(String(128))
     device_name: Mapped[str] = mapped_column(String(160))
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -49,7 +50,7 @@ class EmployeeIn(BaseModel):
     hire_date: date | None = None
     username: str = Field(min_length=3, max_length=80)
     temporary_password: str = Field(min_length=10, max_length=128)
-    role: str = "EMPLOYEE"
+    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"] = "EMPLOYEE"
 
 
 class EmployeeUpdate(BaseModel):
@@ -82,13 +83,15 @@ class AssignmentIn(BaseModel):
     def valid_range(self):
         if self.end_date < self.start_date:
             raise ValueError("end_date phải từ start_date trở đi")
+        if not self.weekdays:
+            raise ValueError("weekdays phải có ít nhất một ngày làm việc")
         if any(day < 0 or day > 6 for day in self.weekdays):
             raise ValueError("weekdays chỉ nhận giá trị 0..6")
         return self
 
 
 class AttendanceAction(BaseModel):
-    device_fingerprint: str | None = Field(default=None, max_length=128)
+    device_fingerprint: str = Field(min_length=8, max_length=128)
     idempotency_key: str = Field(min_length=8, max_length=100)
 
 
@@ -97,6 +100,18 @@ class AdjustmentIn(BaseModel):
     proposed_check_in: datetime | None = None
     proposed_check_out: datetime | None = None
     reason: str = Field(min_length=5, max_length=2000)
+
+    @model_validator(mode="after")
+    def valid_times(self):
+        if not self.proposed_check_in and not self.proposed_check_out:
+            raise ValueError("Phải đề xuất ít nhất giờ check-in hoặc check-out")
+        if (
+            self.proposed_check_in
+            and self.proposed_check_out
+            and self.proposed_check_out <= self.proposed_check_in
+        ):
+            raise ValueError("Giờ check-out phải sau giờ check-in")
+        return self
 
 
 class ReviewIn(BaseModel):

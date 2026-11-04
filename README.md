@@ -132,7 +132,7 @@ $env:QT_QPA_PLATFORM = "offscreen"
 .\scripts\build_portable.ps1
 ```
 
-Trạng thái hiện tại: **40 kiểm thử đạt**, Ruff không phát hiện lỗi.
+Trạng thái hiện tại: **48 kiểm thử đạt**, Ruff không phát hiện lỗi.
 
 ## Thư mục quan trọng
 

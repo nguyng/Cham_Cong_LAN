@@ -203,6 +203,21 @@ def ensure_employee(user: User) -> Employee:
     return user.employee
 
 
+def protect_admin_continuity(db: Session, target: User, actor: User):
+    """Prevent account changes that could remove the last usable Admin."""
+    if not target.active or target.role.name != RoleName.ADMIN:
+        return
+    if target.id == actor.id:
+        raise HTTPException(409, "Không thể vô hiệu hóa Admin đang đăng nhập")
+    active_admins = db.scalar(
+        select(func.count(User.id))
+        .join(Role)
+        .where(User.active.is_(True), Role.name == RoleName.ADMIN)
+    )
+    if active_admins <= 1:
+        raise HTTPException(409, "Hệ thống phải còn ít nhất một Admin hoạt động")
+
+
 def enforce_employee_scope(db: Session, user: User, employee_id: int) -> Employee:
     """Enforce the row-level scope used by every Manager-facing endpoint."""
     employee = db.get(Employee, employee_id)
@@ -421,8 +436,15 @@ def change_user_role(user_id: int, role: RoleName, request: Request, db: Db, adm
     target_role = db.scalar(select(Role).where(Role.name == role))
     if not item or not target_role:
         raise HTTPException(404, "Không tìm thấy tài khoản hoặc vai trò")
+    if item.role.name != role and item.role.name == RoleName.ADMIN:
+        protect_admin_continuity(db, item, admin)
     before = {"role": item.role.name.value}
     item.role_id = target_role.id
+    if before["role"] != role.value:
+        db.query(LoginSession).filter(
+            LoginSession.user_id == item.id,
+            LoginSession.revoked_at.is_(None),
+        ).update({LoginSession.revoked_at: now_utc()})
     audit(db, "USER_ROLE_CHANGED", admin, client_ip(request), item, before, {"role": role.value})
     db.commit()
     return {"id": item.id, "role": role.value}
@@ -645,9 +667,17 @@ def set_employee_active(employee_id: int, active: bool, request: Request, db: Db
     if not item:
         raise HTTPException(404, "Không tìm thấy nhân viên")
     before = {"active": item.active}
+    user = db.scalar(select(User).where(User.employee_id == item.id))
+    if user and item.active and not active:
+        protect_admin_continuity(db, user, admin)
     item.active = active
-    if user := db.scalar(select(User).where(User.employee_id == item.id)):
+    if user:
         user.active = active
+        if not active:
+            db.query(LoginSession).filter(
+                LoginSession.user_id == user.id,
+                LoginSession.revoked_at.is_(None),
+            ).update({LoginSession.revoked_at: now_utc()})
     audit(
         db, "EMPLOYEE_STATUS_CHANGED", admin, client_ip(request), item, before, {"active": active}
     )
@@ -711,10 +741,12 @@ def deactivate_shift(shift_id: int, db: Db, admin: Admin):
 
 @organization_router.post("/api/v1/shift-assignments", status_code=201)
 def assign_shift(payload: AssignmentIn, db: Db, manager_user: Manager):
-    if manager_user.role.name == RoleName.MANAGER:
-        employee = db.get(Employee, payload.employee_id)
-        if not employee or employee.department_id != ensure_employee(manager_user).department_id:
-            raise HTTPException(403, "Ngoài phạm vi phòng ban")
+    employee = enforce_employee_scope(db, manager_user, payload.employee_id)
+    if not employee.active:
+        raise HTTPException(409, "Nhân viên đã ngừng hoạt động")
+    shift = db.get(Shift, payload.shift_id)
+    if not shift or not shift.active:
+        raise HTTPException(409, "Ca làm không tồn tại hoặc đã ngừng hoạt động")
     results = []
     for offset in range((payload.end_date - payload.start_date).days + 1):
         work_date = payload.start_date + timedelta(days=offset)
@@ -786,11 +818,7 @@ def list_assignments(
     )
 
 
-def approved_device(
-    db: Session, employee_id: int, fingerprint: str | None, ip: str
-) -> Device | None:
-    if not fingerprint:
-        return None
+def approved_device(db: Session, employee_id: int, fingerprint: str, ip: str) -> Device:
     digest = hash_token(fingerprint)
     device = db.scalar(
         select(Device).where(
@@ -809,9 +837,22 @@ def approved_device(
 @organization_router.post("/api/v1/devices", status_code=201)
 def register_device(payload: DeviceIn, request: Request, db: Db, user: CurrentUser):
     employee = ensure_employee(user)
+    fingerprint_hash = hash_token(payload.fingerprint)
+    existing = db.scalar(
+        select(Device).where(
+            Device.employee_id == employee.id,
+            Device.fingerprint_hash == fingerprint_hash,
+        )
+    )
+    if existing:
+        existing.device_name = payload.device_name
+        existing.last_ip = client_ip(request)
+        existing.last_seen_at = now_utc()
+        db.commit()
+        return {"id": existing.id, "approved": existing.approved}
     item = Device(
         employee_id=employee.id,
-        fingerprint_hash=hash_token(payload.fingerprint),
+        fingerprint_hash=fingerprint_hash,
         device_name=payload.device_name,
         last_ip=client_ip(request),
         last_seen_at=now_utc(),
@@ -821,7 +862,15 @@ def register_device(payload: DeviceIn, request: Request, db: Db, user: CurrentUs
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(409, "Thiết bị đã được đăng ký") from None
+        existing = db.scalar(
+            select(Device).where(
+                Device.employee_id == employee.id,
+                Device.fingerprint_hash == fingerprint_hash,
+            )
+        )
+        if existing:
+            return {"id": existing.id, "approved": existing.approved}
+        raise HTTPException(409, "Không thể đăng ký thiết bị") from None
     db.refresh(item)
     return {"id": item.id, "approved": item.approved}
 
@@ -1040,6 +1089,12 @@ def review_adjustment(adjustment_id: int, payload: ReviewIn, db: Db, reviewer: M
     item.review_note = payload.note
     item.reviewed_at = now_utc()
     if payload.approve:
+        effective_check_in = item.proposed_check_in or record.check_in_at
+        effective_check_out = item.proposed_check_out or record.check_out_at
+        if effective_check_out and attendance.as_utc(effective_check_out) <= attendance.as_utc(
+            effective_check_in
+        ):
+            raise HTTPException(409, "Giờ check-out phải sau giờ check-in")
         if item.proposed_check_in:
             record.check_in_at = item.proposed_check_in
         if item.proposed_check_out:
@@ -1053,7 +1108,11 @@ def review_adjustment(adjustment_id: int, payload: ReviewIn, db: Db, reviewer: M
 def create_leave_type(payload: LeaveTypeIn, db: Db, admin: Admin):
     item = LeaveType(**payload.model_dump())
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Mã loại nghỉ phép đã tồn tại") from None
     db.refresh(item)
     return {"id": item.id, **payload.model_dump()}
 
@@ -1102,6 +1161,12 @@ def deactivate_leave_type(leave_type_id: int, db: Db, admin: Admin):
 
 @leave_router.put("/api/v1/leave-balances")
 def set_leave_balance(payload: LeaveBalanceIn, db: Db, admin: Admin):
+    employee = db.get(Employee, payload.employee_id)
+    if not employee or not employee.active:
+        raise HTTPException(409, "Nhân viên không tồn tại hoặc đã ngừng hoạt động")
+    leave_type = db.get(LeaveType, payload.leave_type_id)
+    if not leave_type or not leave_type.active:
+        raise HTTPException(409, "Loại nghỉ phép không tồn tại hoặc đã ngừng hoạt động")
     item = db.scalar(
         select(LeaveBalance).where(
             LeaveBalance.employee_id == payload.employee_id,
@@ -1110,6 +1175,8 @@ def set_leave_balance(payload: LeaveBalanceIn, db: Db, admin: Admin):
         )
     )
     if item:
+        if payload.allocated_days < item.used_days:
+            raise HTTPException(409, "Số ngày cấp không thể nhỏ hơn số ngày đã sử dụng")
         item.allocated_days = payload.allocated_days
     else:
         item = LeaveBalance(**payload.model_dump())
@@ -1159,6 +1226,9 @@ def list_leave_balances(
 @leave_router.post("/api/v1/leaves", status_code=201)
 async def create_leave(payload: LeaveRequestIn, db: Db, user: CurrentUser):
     employee = ensure_employee(user)
+    leave_type = db.get(LeaveType, payload.leave_type_id)
+    if not leave_type or not leave_type.active:
+        raise HTTPException(409, "Loại nghỉ phép không tồn tại hoặc đã ngừng hoạt động")
     days = business_days(payload.start_date, payload.end_date)
     if days <= 0:
         raise HTTPException(400, "Khoảng nghỉ không có ngày làm việc")

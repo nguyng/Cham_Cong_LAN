@@ -10,6 +10,7 @@ def test_all_ui_pages_and_typed_dialog_construct():
 from PySide6.QtWidgets import QApplication, QPushButton, QScrollArea, QTableWidget
 from app.network.realtime import RealtimeThread
 from app.ui.dialogs import Field, FormDialog
+from app.ui.login import LoginDialog
 from app.ui.main_window import ADMIN_PAGES, EMPLOYEE_PAGES, MANAGER_PAGES, MainWindow
 
 RealtimeThread.start = lambda self: None
@@ -19,6 +20,11 @@ class DummyApi:
     websocket_url = "ws://127.0.0.1:1/api/v1/ws?token=test"
     def __init__(self):
         self.calls = []
+    def clear_session(self):
+        self.token = None
+        self.role = None
+        self.employee_id = None
+        self.device_registration_pending = False
     def request(self, method, path, **kwargs):
         self.calls.append((method, path, kwargs))
         if path == "/api/v1/dashboard":
@@ -28,6 +34,19 @@ class DummyApi:
         return []
 
 app = QApplication([])
+class LoginApi:
+    config = {"server_url": "http://127.0.0.1:8000"}
+    def __init__(self):
+        self.login_args = None
+    def login(self, username, password, register_device=True):
+        self.login_args = (username, password, register_device)
+admin_login_api = LoginApi()
+admin_login = LoginDialog(admin_login_api, admin_only=True)
+admin_login.username.setText("manage")
+admin_login.password.setText("123456")
+admin_login.submit()
+assert admin_login_api.login_args == ("manage", "123456", False)
+admin_login.close()
 user_api = DummyApi()
 window = MainWindow(user_api)
 assert window.page_names == EMPLOYEE_PAGES

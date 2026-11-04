@@ -13,11 +13,12 @@ os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET"] = "test-secret-key-with-at-least-32-characters"
 os.environ["BACKUP_DIRECTORY"] = "test_backups"
 
-from app.core.security import hash_password  # noqa: E402
+from app.core.security import hash_password, hash_token  # noqa: E402
 from app.database.session import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.entities import (  # noqa: E402
     Department,
+    Device,
     Employee,
     LeaveBalance,
     LeaveType,
@@ -136,3 +137,19 @@ def manager_headers(client):
 def admin_headers(client):
     token = login(client, "admin", "AdminPass123!")["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def approved_employee_device():
+    fingerprint = "approved-employee-test-device"
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        db.add(
+            Device(
+                employee_id=employee.id,
+                fingerprint_hash=hash_token(fingerprint),
+                device_name="Máy kiểm thử NV001",
+                approved=True,
+            )
+        )
+    return fingerprint

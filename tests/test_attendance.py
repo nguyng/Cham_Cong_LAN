@@ -7,8 +7,11 @@ from app.services.attendance import check_in, check_out
 from fastapi import HTTPException
 
 
-def test_check_in_out_and_idempotency(client, employee_headers):
-    payload = {"device_fingerprint": None, "idempotency_key": "request-0001"}
+def test_check_in_out_and_idempotency(client, employee_headers, approved_employee_device):
+    payload = {
+        "device_fingerprint": approved_employee_device,
+        "idempotency_key": "request-0001",
+    }
     first = client.post("/api/v1/attendance/check-in", json=payload, headers=employee_headers)
     assert first.status_code == 201, first.text
     replay = client.post("/api/v1/attendance/check-in", json=payload, headers=employee_headers)
@@ -27,6 +30,15 @@ def test_check_in_out_and_idempotency(client, employee_headers):
     )
     assert checkout.status_code == 200
     assert checkout.json()["check_out_at"] is not None
+
+
+def test_attendance_rejects_missing_device_fingerprint(client, employee_headers):
+    response = client.post(
+        "/api/v1/attendance/check-in",
+        json={"device_fingerprint": None, "idempotency_key": "missing-device"},
+        headers=employee_headers,
+    )
+    assert response.status_code == 422
 
 
 def test_overnight_shift_late_early_calculation():

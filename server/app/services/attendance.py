@@ -122,14 +122,16 @@ def check_out(db: Session, employee: Employee, ip: str, now: datetime | None = N
 
 
 def recalculate(record: AttendanceRecord):
-    if not record.check_out_at:
-        return
     start, end = shift_window(record.work_date, record.shift)
     record.late_minutes = max(
         0,
         int((as_utc(record.check_in_at) - start).total_seconds() // 60)
         - record.shift.late_grace_minutes,
     )
+    if not record.check_out_at:
+        record.early_leave_minutes = 0
+        record.status = AttendanceStatus.LATE if record.late_minutes else AttendanceStatus.OPEN
+        return
     record.early_leave_minutes = max(
         0,
         int((end - as_utc(record.check_out_at)).total_seconds() // 60)
@@ -140,3 +142,11 @@ def recalculate(record: AttendanceRecord):
         int((as_utc(record.check_out_at) - as_utc(record.check_in_at)).total_seconds() // 60)
         - record.break_minutes,
     )
+    if record.late_minutes and record.early_leave_minutes:
+        record.status = AttendanceStatus.LATE_AND_EARLY
+    elif record.late_minutes:
+        record.status = AttendanceStatus.LATE
+    elif record.early_leave_minutes:
+        record.status = AttendanceStatus.EARLY_LEAVE
+    else:
+        record.status = AttendanceStatus.ON_TIME

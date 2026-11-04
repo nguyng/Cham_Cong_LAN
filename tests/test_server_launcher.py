@@ -26,7 +26,54 @@ def test_launcher_migrates_a_new_sqlite_database():
         revision = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert "users" in tables
     assert "attendance_records" in tables
-    assert revision == "20261030_0002"
+    assert revision == "20261104_0003"
+
+
+def test_launcher_migrates_legacy_device_uniqueness_without_data_loss():
+    database = Path(".test-runtime") / f"legacy-device-{uuid4()}" / "attendance.db"
+    database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            PRAGMA foreign_keys=ON;
+            CREATE TABLE employees (id INTEGER PRIMARY KEY);
+            CREATE TABLE devices (
+                id INTEGER PRIMARY KEY,
+                employee_id INTEGER NOT NULL REFERENCES employees(id),
+                fingerprint_hash VARCHAR(128) NOT NULL UNIQUE,
+                device_name VARCHAR(160) NOT NULL,
+                approved BOOLEAN NOT NULL DEFAULT 0,
+                active BOOLEAN NOT NULL DEFAULT 1,
+                last_ip VARCHAR(64),
+                last_seen_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );
+            CREATE INDEX ix_devices_employee_id ON devices(employee_id);
+            CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY);
+            INSERT INTO alembic_version VALUES ('20261030_0002');
+            INSERT INTO employees(id) VALUES (1), (2);
+            INSERT INTO devices(id, employee_id, fingerprint_hash, device_name)
+            VALUES (1, 1, 'shared-fingerprint', 'Máy cũ');
+            """
+        )
+
+    run_migrations(f"sqlite:///{database.as_posix()}")
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO devices(employee_id, fingerprint_hash, device_name) VALUES (?, ?, ?)",
+            (2, "shared-fingerprint", "Máy dùng chung"),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO devices(employee_id, fingerprint_hash, device_name) VALUES (?, ?, ?)",
+                (1, "shared-fingerprint", "Bản ghi trùng"),
+            )
+        count = connection.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+        revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+    assert count == 2
+    assert revision == "20261104_0003"
 
 
 def test_packaged_bootstrap_creates_admin_without_plaintext_password():
