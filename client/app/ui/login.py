@@ -60,18 +60,41 @@ class LoginDialog(QDialog):
         layout.addWidget(self.server)
 
     def find_server(self):
-        url = self.api.discover()
+        try:
+            url = self.api.discover()
+        except (ApiError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Không thể tìm Server", str(exc))
+            return
         if url:
-            self.api.set_server(url)
+            try:
+                self.api.set_server(url)
+            except ApiError as exc:
+                QMessageBox.warning(self, "Không thể lưu Server", str(exc))
+                return
             self.server.setText(url)
         else:
-            QMessageBox.warning(self, "Khám phá Server", "Không tìm thấy Server trong mạng LAN.")
+            QMessageBox.warning(
+                self,
+                "Không tìm thấy Server",
+                "Không tìm thấy Server trong mạng LAN.\n\n"
+                "Hãy kiểm tra Server đang chạy, máy đang cùng mạng LAN và Firewall cho phép UDP.",
+            )
 
     def submit(self):
+        username = self.username.text().strip()
+        password = self.password.text()
+        if not username or not password:
+            QMessageBox.warning(
+                self,
+                "Thiếu thông tin đăng nhập",
+                "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.",
+            )
+            (self.username if not username else self.password).setFocus()
+            return
         try:
             self.api.login(
-                self.username.text().strip(),
-                self.password.text(),
+                username,
+                password,
                 register_device=not self.admin_only,
             )
         except ApiError as exc:

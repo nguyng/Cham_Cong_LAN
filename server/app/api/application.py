@@ -1,3 +1,4 @@
+import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
@@ -8,8 +9,9 @@ import jwt
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -88,6 +90,7 @@ from app.services.reporting import excel_report, pdf_report
 from app.websocket.manager import manager
 
 settings = get_settings()
+logger = logging.getLogger("attendance.server")
 
 ADMIN_REMOVABLE_MODELS = {
     "employees": Employee,
@@ -309,6 +312,40 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(_request: Request, exc: RequestValidationError):
+    fields = []
+    for error in exc.errors():
+        location = ".".join(
+            str(part) for part in error.get("loc", []) if part not in ("body", "query", "path")
+        )
+        message = error.get("msg", "không hợp lệ")
+        fields.append(f"{location}: {message}" if location else str(message))
+    detail = "Dữ liệu không hợp lệ: " + "; ".join(fields or ["vui lòng kiểm tra lại"])
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": detail, "errors": exc.errors()}),
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_server_error(request: Request, exc: Exception):
+    error_id = secrets.token_hex(4).upper()
+    logger.error(
+        "Unhandled request error id=%s method=%s path=%s",
+        error_id,
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"Server gặp lỗi nội bộ. Mã lỗi: {error_id}. Hãy kiểm tra cửa sổ Server."
+        },
+    )
 
 
 @system_router.get("/api/v1/health")
@@ -846,6 +883,9 @@ def register_device(payload: DeviceIn, request: Request, db: Db, user: CurrentUs
     )
     if existing:
         existing.device_name = payload.device_name
+        if not existing.active:
+            existing.active = True
+            existing.approved = False
         existing.last_ip = client_ip(request)
         existing.last_seen_at = now_utc()
         db.commit()
@@ -903,12 +943,22 @@ def approve_device(
 
 
 @organization_router.get("/api/v1/devices")
-def list_devices(db: Db, reviewer: Manager, pagination: Page):
+def list_devices(
+    db: Db,
+    reviewer: Manager,
+    pagination: Page,
+    approved: bool | None = None,
+    active: bool | None = None,
+):
     query = select(Device)
     if reviewer.role.name == RoleName.MANAGER:
         query = query.join(Employee).where(
             Employee.department_id == ensure_employee(reviewer).department_id
         )
+    if approved is not None:
+        query = query.where(Device.approved.is_(approved))
+    if active is not None:
+        query = query.where(Device.active.is_(active))
     return paginated(
         db,
         query.order_by(Device.created_at.desc()),
@@ -924,6 +974,40 @@ def list_devices(db: Db, reviewer: Manager, pagination: Page):
             "last_seen_at": x.last_seen_at,
         },
     )
+
+
+@organization_router.delete("/api/v1/devices/{device_id}")
+def remove_old_device(device_id: int, request: Request, db: Db, reviewer: Manager):
+    item = db.get(Device, device_id)
+    if not item:
+        raise HTTPException(404, "Không tìm thấy thiết bị")
+    enforce_employee_scope(db, reviewer, item.employee_id)
+    before = {
+        "employee_id": item.employee_id,
+        "device_name": item.device_name,
+        "approved": item.approved,
+        "active": item.active,
+    }
+    linked_attendance = db.scalar(
+        select(func.count()).select_from(AttendanceRecord).where(AttendanceRecord.device_id == item.id)
+    )
+    archived = bool(linked_attendance)
+    audit(
+        db,
+        "DEVICE_REMOVED",
+        reviewer,
+        client_ip(request),
+        item,
+        before=before,
+        after={"approved": False, "active": False, "archived": archived},
+    )
+    if archived:
+        item.approved = False
+        item.active = False
+    else:
+        db.delete(item)
+    db.commit()
+    return {"id": device_id, "deleted": not archived, "archived": archived}
 
 
 @organization_router.get("/api/v1/devices/me")

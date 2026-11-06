@@ -88,6 +88,52 @@ def test_manager_can_approve_device_only_in_own_department(
     assert denied.status_code == 403
 
 
+def test_manager_can_remove_old_device_in_own_department(
+    client, employee_headers, manager_headers
+):
+    payload = {"fingerprint": "old-device-for-removal", "device_name": "Máy cũ"}
+    registered = client.post("/api/v1/devices", json=payload, headers=employee_headers)
+    device_id = registered.json()["id"]
+
+    removed = client.delete(f"/api/v1/devices/{device_id}", headers=manager_headers)
+
+    assert removed.status_code == 200
+    assert removed.json() == {"id": device_id, "deleted": True, "archived": False}
+    pending = client.get(
+        "/api/v1/devices", params={"approved": False}, headers=manager_headers
+    )
+    assert pending.status_code == 200
+    assert all(item["id"] != device_id for item in pending.json())
+
+
+def test_removed_device_with_attendance_is_archived_and_can_register_again(
+    client, employee_headers, manager_headers, approved_employee_device
+):
+    check_in = client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "archive-old-device-check-in",
+        },
+        headers=employee_headers,
+    )
+    assert check_in.status_code == 201
+    devices = client.get("/api/v1/devices", headers=manager_headers).json()
+    device_id = next(item["id"] for item in devices if item["device_name"] == "Máy kiểm thử NV001")
+
+    removed = client.delete(f"/api/v1/devices/{device_id}", headers=manager_headers)
+    assert removed.status_code == 200
+    assert removed.json()["archived"] is True
+
+    registered_again = client.post(
+        "/api/v1/devices",
+        json={"fingerprint": approved_employee_device, "device_name": "Máy đăng ký lại"},
+        headers=employee_headers,
+    )
+    assert registered_again.status_code == 201
+    assert registered_again.json() == {"id": device_id, "approved": False}
+
+
 def test_same_workstation_can_be_registered_for_multiple_accounts(
     client, employee_headers, manager_headers
 ):

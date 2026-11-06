@@ -69,8 +69,19 @@ assert weekdays.values() == {"weekdays": [0, 2, 4]}
 weekdays.close()
 admin_window = MainWindow(DummyApi(), admin_only=True)
 assert admin_window.stack.count() == len(ADMIN_PAGES)
+assert "Phê duyệt thiết bị" in ADMIN_PAGES
+assert "Thiết bị" not in ADMIN_PAGES
 assert "Trung tâm quản trị" in admin_window.windowTitle()
 assert hasattr(admin_window, "admin_metrics")
+assert "qlineargradient" in admin_window.styleSheet()
+assert "QTableWidget::item:selected" in admin_window.styleSheet()
+admin_window.toggle_theme()
+assert admin_window.dark is True
+admin_window.toggle_theme()
+assert admin_window.dark is False
+admin_window.show_page(1)
+app.processEvents()
+assert admin_window.stack.currentIndex() == 1
 admin_labels = {button.text() for button in admin_window.findChildren(QPushButton)}
 assert {
     "Thêm",
@@ -80,7 +91,10 @@ assert {
     "Sao lưu",
     "Khôi phục",
     "Gửi Random Check",
+    "⇩ Xuất file",
+    "↻ Làm mới",
 } <= admin_labels
+assert "⟲ Reset" not in admin_labels
 department_table = next(table for table in admin_window.findChildren(QTableWidget) if table.property("page_name") == "Phòng ban")
 admin_window.load_table(department_table, "/api/v1/departments")
 assert department_table.columnCount() >= 5
@@ -103,7 +117,8 @@ assert manager_user_window.page_names == EMPLOYEE_PAGES
 assert manager_admin_window.page_names == MANAGER_PAGES
 manager_admin_labels = {button.text() for button in manager_admin_window.findChildren(QPushButton)}
 assert "Xóa" not in manager_admin_labels
-assert {"Phê duyệt", "Thu hồi"} <= manager_admin_labels
+assert "Phê duyệt thiết bị" in MANAGER_PAGES
+assert {"Phê duyệt", "Thu hồi", "Xóa thiết bị cũ", "⇩ Xuất file", "↻ Làm mới"} <= manager_admin_labels
 manager_user_window.close()
 manager_admin_window.close()
 logout_events = []

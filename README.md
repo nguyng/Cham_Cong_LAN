@@ -57,8 +57,8 @@ Get-Process AttendanceServer,AttendanceAdmin,AttendanceClient `
   chỉ thấy dữ liệu cá nhân.
 - `AttendanceAdmin`: cổng quản lý. Admin quản lý toàn hệ thống; Manager
   chỉ quản lý nhân viên thuộc phòng ban của mình.
-- Chỉ Admin có quyền xóa. Manager được phê duyệt/thu hồi thiết bị
-  trong phạm vi phòng ban.
+- Admin có quyền xóa dữ liệu quản trị. Manager được phê duyệt, thu hồi và loại bỏ
+  thiết bị cũ trong phạm vi phòng ban.
 
 ## Phê duyệt thiết bị
 
@@ -66,7 +66,7 @@ Lần đầu nhân viên đăng nhập trên một máy, thiết bị sẽ ở t
 chờ duyệt và chưa thể chấm công.
 
 1. Mở `AttendanceAdmin.exe` và đăng nhập Admin hoặc Manager.
-2. Chọn **Thiết bị**.
+2. Chọn chức năng riêng **Phê duyệt thiết bị** trên thanh điều hướng.
 3. Chọn đúng nhân viên/tên máy, sau đó nhấn **Phê duyệt**.
 4. Quay lại Client và chấm công lại.
 
@@ -76,6 +76,10 @@ chờ duyệt và chưa thể chấm công.
 - Lịch làm việc, lịch sử chấm công và yêu cầu điều chỉnh.
 - Nghỉ phép, quỹ phép, phân ca và duyệt yêu cầu.
 - Random Check, cảnh báo và thông báo WebSocket.
+- Cảnh báo lỗi rõ ràng cho lỗi nhập liệu, phân quyền, mạng LAN, timeout, cấu hình và lỗi Server.
+- Một nút Làm mới để đặt lại bộ lọc, phân trang và tải lại dữ liệu; hỗ trợ xuất CSV và làm nổi bật dòng đang chọn.
+- Design system nhất quán: Indigo cho nhân viên, Teal cho quản trị, màu trạng thái có ý nghĩa,
+  thẻ bo góc, bóng đổ và hiệu ứng chuyển trang nhẹ.
 - Quản lý nhân viên, phòng ban, chức vụ, ca làm và tài khoản.
 - Báo cáo Excel/PDF, sao lưu và khôi phục SQLite.
 - Phân trang, nhật ký kiểm toán và tự dọn phiên dữ liệu cũ.
@@ -132,7 +136,7 @@ $env:QT_QPA_PLATFORM = "offscreen"
 .\scripts\build_portable.ps1
 ```
 
-Trạng thái hiện tại: **48 kiểm thử đạt**, Ruff không phát hiện lỗi.
+Trạng thái hiện tại: **54 kiểm thử đạt**, Ruff không phát hiện lỗi.
 
 ## Thư mục quan trọng
 

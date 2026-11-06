@@ -7,6 +7,7 @@ from PySide6.QtCore import QThread, Signal
 class RealtimeThread(QThread):
     message = Signal(dict)
     connection_changed = Signal(bool)
+    error = Signal(str)
 
     def __init__(self, url_factory, parent=None):
         super().__init__(parent)
@@ -51,8 +52,12 @@ class RealtimeThread(QThread):
                             self.message.emit(json.loads(payload))
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 self.connection_changed.emit(False)
+                self.error.emit(
+                    "Kết nối thông báo thời gian thực bị gián đoạn "
+                    f"({type(exc).__name__}). Hệ thống sẽ tự kết nối lại."
+                )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30)
 

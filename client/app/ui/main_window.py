@@ -1,8 +1,18 @@
+import csv
 import json
 from datetime import UTC, datetime
 
 from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView
-from PySide6.QtCore import QDate, QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QDate,
+    QEasingCurve,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -10,6 +20,7 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QFileDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
@@ -56,7 +67,7 @@ ADMIN_PAGES = [
     "Quỹ phép",
     "Cảnh báo",
     "Xác minh ngẫu nhiên",
-    "Thiết bị",
+    "Phê duyệt thiết bị",
     "Client kết nối",
     "Tài khoản",
     "Báo cáo",
@@ -73,7 +84,7 @@ MANAGER_PAGES = [
     "Quỹ phép",
     "Cảnh báo",
     "Xác minh ngẫu nhiên",
-    "Thiết bị",
+    "Phê duyệt thiết bị",
     "Báo cáo",
 ]
 
@@ -98,7 +109,7 @@ PAGE_ICONS = {
     "Quỹ phép": "⊕",
     "Cảnh báo": "!",
     "Xác minh ngẫu nhiên": "◎",
-    "Thiết bị": "▱",
+    "Phê duyệt thiết bị": "▱",
     "Client kết nối": "⌁",
     "Tài khoản": "♙",
     "Báo cáo": "▥",
@@ -127,7 +138,9 @@ PAGE_DESCRIPTIONS = {
     "Quỹ phép": "Cấp và cập nhật số ngày phép theo nhân viên, năm và loại phép.",
     "Cảnh báo": "Kiểm tra và xử lý thủ công các dấu hiệu bất thường.",
     "Xác minh ngẫu nhiên": "Theo dõi kết quả các yêu cầu xác minh hiện diện.",
-    "Thiết bị": "Phê duyệt hoặc thu hồi thiết bị được phép chấm công.",
+    "Phê duyệt thiết bị": (
+        "Chức năng riêng để phê duyệt, thu hồi và loại bỏ thiết bị chấm công cũ."
+    ),
     "Client kết nối": "Danh sách tài khoản đang kết nối thời gian thực tới Server.",
     "Tài khoản": "Quản lý vai trò và mở khóa tài khoản.",
     "Báo cáo": "Lọc, xem và xuất báo cáo Excel/PDF theo thời gian và nhân sự.",
@@ -250,7 +263,7 @@ TABLE_COLUMNS = {
         "result",
         "response_ip",
     ],
-    "Thiết bị": [
+    "Phê duyệt thiết bị": [
         "id",
         "employee_code",
         "full_name",
@@ -385,6 +398,14 @@ STATUS_TEXT = {
 class MainWindow(QMainWindow):
     session_ended = Signal(bool)
 
+    @staticmethod
+    def add_shadow(widget, blur=24, y_offset=6, alpha=38):
+        shadow = QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(blur)
+        shadow.setOffset(0, y_offset)
+        shadow.setColor(QColor(15, 23, 42, alpha))
+        widget.setGraphicsEffect(shadow)
+
     def __init__(self, api, admin_only=False):
         super().__init__()
         self.api = api
@@ -399,13 +420,15 @@ class MainWindow(QMainWindow):
         self.nav_buttons = []
         self._logout_requested = False
         self._session_end_emitted = False
+        self._dashboard_error_shown = False
+        self._realtime_error_shown = False
         self.setWindowTitle(
             "LAN Attendance — Trung tâm quản trị"
             if admin_only
             else "LAN Attendance — Cổng nhân viên"
         )
         self.resize(1360, 820)
-        shell = QWidget()
+        shell = QWidget(objectName="appShell")
         sidebar = QFrame(objectName="adminSidebar" if admin_only else "sidebar")
         root, sidebar_box = QHBoxLayout(shell), QVBoxLayout(sidebar)
         root.setContentsMargins(14, 14, 14, 14)
@@ -476,6 +499,7 @@ class MainWindow(QMainWindow):
             self.nav_buttons[0].setChecked(True)
         self.realtime = RealtimeThread(lambda: self.api.websocket_url, self)
         self.realtime.connection_changed.connect(self.connection_state)
+        self.realtime.error.connect(self.realtime_error)
         self.realtime.message.connect(self.realtime_message)
         self.realtime.start()
         QTimer.singleShot(50, self.refresh_dashboard)
@@ -486,7 +510,7 @@ class MainWindow(QMainWindow):
                     self,
                     "Thiết bị mới",
                     "Máy này đã được đăng ký nhưng chưa được phê duyệt.\n\n"
-                    "Hãy mở AttendanceAdmin → Thiết bị → chọn máy này → Phê duyệt, "
+                    "Hãy mở AttendanceAdmin → Phê duyệt thiết bị → chọn máy này → Phê duyệt, "
                     "sau đó chấm công lại.",
                 ),
             )
@@ -497,9 +521,10 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(26, 18, 26, 18)
         header, header_box = QFrame(objectName="pageHeader"), QVBoxLayout()
         header.setLayout(header_box)
-        header_box.setContentsMargins(0, 0, 0, 5)
+        header_box.setContentsMargins(20, 14, 20, 14)
         header_box.addWidget(QLabel(name, objectName="title"))
         header_box.addWidget(QLabel(PAGE_DESCRIPTIONS.get(name, ""), objectName="subtitle"))
+        self.add_shadow(header, blur=22, y_offset=4, alpha=26)
         layout.addWidget(header)
         if name == "Trung tâm điều hành":
             self.build_admin_dashboard(layout)
@@ -512,16 +537,21 @@ class MainWindow(QMainWindow):
                 ("pending_leave", "Đơn chờ duyệt"),
                 ("open_alerts", "Cảnh báo"),
             ]
+            tones = ("blue", "violet", "mint", "coral")
             for i, (key, label) in enumerate(metric_definitions):
                 card, box = QFrame(objectName="card"), QVBoxLayout()
+                card.setProperty("tone", tones[i % len(tones)])
                 card.setLayout(box)
                 box.addWidget(QLabel(label))
                 value = QLabel("—", objectName="metric")
                 box.addWidget(value)
                 self.metrics[key] = value
                 grid.addWidget(card, i // 2, i % 2)
+                self.add_shadow(card, blur=20, y_offset=5, alpha=24)
             layout.addLayout(grid)
             self.chart_values = QBarSet("Số lượng")
+            self.chart_values.setColor(QColor("#4F46E5"))
+            self.chart_values.setBorderColor(QColor("#4338CA"))
             self.chart_values.append([0] * len(metric_definitions))
             series = QBarSeries()
             series.append(self.chart_values)
@@ -544,6 +574,7 @@ class MainWindow(QMainWindow):
             return page
         if name == "Chấm công":
             hero = QFrame(objectName="attendanceHero")
+            self.add_shadow(hero, blur=34, y_offset=9, alpha=52)
             hero_box = QVBoxLayout(hero)
             hero_box.setContentsMargins(32, 26, 32, 26)
             hero_box.setSpacing(4)
@@ -563,6 +594,7 @@ class MainWindow(QMainWindow):
             layout.addWidget(hero)
 
             action_card = QFrame(objectName="attendanceActionCard")
+            self.add_shadow(action_card, blur=22, y_offset=5, alpha=26)
             action_box = QVBoxLayout(action_card)
             action_box.setContentsMargins(24, 20, 24, 20)
             action_box.setSpacing(14)
@@ -595,6 +627,7 @@ class MainWindow(QMainWindow):
             summary = QGridLayout()
             summary.setHorizontalSpacing(14)
             self.attendance_summary = {}
+            summary_tones = ("violet", "mint", "coral", "blue")
             for column, (key, title, icon) in enumerate(
                 (
                     ("shift", "Ca làm hôm nay", "◷"),
@@ -604,6 +637,8 @@ class MainWindow(QMainWindow):
                 )
             ):
                 card = QFrame(objectName="attendanceSummaryCard")
+                card.setProperty("tone", summary_tones[column])
+                self.add_shadow(card, blur=18, y_offset=4, alpha=22)
                 card_box = QVBoxLayout(card)
                 card_box.setContentsMargins(18, 16, 18, 16)
                 card_box.addWidget(QLabel(f"{icon}  {title}", objectName="summaryTitle"))
@@ -627,17 +662,21 @@ class MainWindow(QMainWindow):
             layout.addWidget(notice)
 
             guide = QFrame(objectName="attendanceGuide")
+            self.add_shadow(guide, blur=20, y_offset=5, alpha=24)
             guide_box = QVBoxLayout(guide)
             guide_box.setContentsMargins(20, 16, 20, 16)
             guide_box.addWidget(QLabel("Quy trình chấm công an toàn", objectName="sectionTitle"))
             steps = QHBoxLayout()
             steps.setSpacing(12)
-            for number, title, description in (
+            for step_index, (number, title, description) in enumerate(
+                (
                 ("01", "Kiểm tra ca", "Xác nhận ca làm hôm nay trước khi bắt đầu."),
                 ("02", "Ghi nhận giờ vào", "CHECK-IN một lần khi bạn sẵn sàng làm việc."),
                 ("03", "Kết thúc ca", "CHECK-OUT trước khi rời khỏi thiết bị đã đăng ký."),
+                )
             ):
                 step = QFrame(objectName="attendanceStep")
+                step.setProperty("tone", ("blue", "mint", "coral")[step_index])
                 step_box = QHBoxLayout(step)
                 step_box.setContentsMargins(14, 12, 14, 12)
                 badge = QLabel(number, objectName="stepNumber")
@@ -668,7 +707,9 @@ class MainWindow(QMainWindow):
             return page
         toolbar, controls = QFrame(objectName="toolbar"), QHBoxLayout()
         toolbar.setLayout(controls)
-        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setContentsMargins(12, 10, 12, 10)
+        controls.setSpacing(8)
+        self.add_shadow(toolbar, blur=18, y_offset=4, alpha=20)
         table = QTableWidget()
         table.setProperty("page_name", name)
         table.setAlternatingRowColors(True)
@@ -678,13 +719,19 @@ class MainWindow(QMainWindow):
         table.verticalHeader().setVisible(False)
         endpoint = self.endpoint_for(name)
         self.add_page_filters(name, table, controls)
-        refresh = QPushButton("↻ Tải lại")
+        refresh = QPushButton("↻ Làm mới")
         refresh.setProperty("secondary", True)
-        refresh.clicked.connect(lambda _=False, t=table, e=endpoint: self.load_table(t, e))
+        refresh.setToolTip("Đặt lại bộ lọc, phân trang và tải dữ liệu mới nhất")
+        refresh.clicked.connect(lambda _=False, t=table, e=endpoint: self.refresh_table(t, e))
         controls.addWidget(refresh)
+        if self.admin_only:
+            export = QPushButton("⇩ Xuất file")
+            export.setProperty("secondary", True)
+            export.clicked.connect(lambda _=False, t=table: self.export_table_csv(t))
+            controls.addWidget(export)
         for label, handler in self.actions_for(name, table):
             button = QPushButton(label)
-            if label == "Xóa":
+            if label.startswith("Xóa"):
                 button.setProperty("danger", True)
             button.clicked.connect(handler)
             controls.addWidget(button)
@@ -750,8 +797,11 @@ class MainWindow(QMainWindow):
             ("open_alerts", "Cảnh báo đang mở"),
             ("connected_clients", "Client trực tuyến"),
         ]
+        tones = ("blue", "violet", "mint", "coral", "amber")
         for index, (key, title) in enumerate(definitions):
             card = QFrame(objectName="adminCard")
+            card.setProperty("tone", tones[index % len(tones)])
+            self.add_shadow(card, blur=20, y_offset=5, alpha=26)
             box = QVBoxLayout(card)
             box.addWidget(QLabel(title))
             value = QLabel("—", objectName="adminMetric")
@@ -761,6 +811,8 @@ class MainWindow(QMainWindow):
         layout.addLayout(grid)
 
         quick_card = QFrame(objectName="card")
+        quick_card.setProperty("tone", "violet")
+        self.add_shadow(quick_card, blur=22, y_offset=5, alpha=25)
         quick = QVBoxLayout(quick_card)
         quick.addWidget(QLabel("Tác vụ quản trị nhanh", objectName="emptyTitle"))
         quick.addWidget(
@@ -774,7 +826,6 @@ class MainWindow(QMainWindow):
             ("Thêm nhân viên", "Quản lý nhân viên"),
             ("Phân ca", "Phân ca"),
             ("Duyệt nghỉ phép", "Duyệt nghỉ phép"),
-            ("Duyệt thiết bị", "Thiết bị"),
             ("Xử lý cảnh báo", "Cảnh báo"),
             ("Xem báo cáo", "Báo cáo"),
         ):
@@ -847,6 +898,13 @@ class MainWindow(QMainWindow):
             status.addItem("Đã từ chối", "REJECTED")
             controls.addWidget(status)
             filters["status"] = status
+        if name == "Phê duyệt thiết bị":
+            approval = QComboBox()
+            approval.addItem("Đang chờ phê duyệt", False)
+            approval.addItem("Tất cả thiết bị", None)
+            approval.addItem("Đã phê duyệt", True)
+            controls.addWidget(approval)
+            filters["approved"] = approval
         if filters:
             apply_filter = QPushButton("Áp dụng bộ lọc")
             apply_filter.setProperty("secondary", True)
@@ -858,7 +916,8 @@ class MainWindow(QMainWindow):
         try:
             data = self.api.request("GET", path, **kwargs)
             return data if isinstance(data, list) else []
-        except ApiError:
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không tải được dữ liệu liên quan", str(exc))
             return []
 
     def change_table_page(self, table, endpoint, direction):
@@ -869,6 +928,23 @@ class MainWindow(QMainWindow):
         if 1 <= target <= state["pages"]:
             state["page"] = target
             self.load_table(table, endpoint)
+
+    def refresh_table(self, table, endpoint):
+        for key, widget in self.table_filters.get(table, {}).items():
+            if isinstance(widget, QLineEdit):
+                widget.clear()
+            elif isinstance(widget, QComboBox):
+                widget.setCurrentIndex(0)
+            elif isinstance(widget, QDateEdit):
+                widget.setDate(
+                    QDate.currentDate().addMonths(-1) if key == "start" else QDate.currentDate()
+                )
+        state = self.table_pagination.get(table)
+        if state:
+            state["page"] = 1
+        table.clearSelection()
+        self.load_table(table, endpoint)
+        self.show_toast("Đã đặt lại bộ lọc và tải dữ liệu mới nhất.")
 
     @staticmethod
     def empty_message(name):
@@ -891,12 +967,26 @@ class MainWindow(QMainWindow):
         page = self.stack.currentWidget()
         effect = QGraphicsOpacityEffect(page)
         page.setGraphicsEffect(effect)
-        self.page_animation = QPropertyAnimation(effect, b"opacity", self)
-        self.page_animation.setDuration(180)
-        self.page_animation.setStartValue(0.35)
-        self.page_animation.setEndValue(1.0)
-        self.page_animation.setEasingCurve(QEasingCurve.OutCubic)
-        self.page_animation.finished.connect(lambda: page.setGraphicsEffect(None))
+        end_position = page.pos()
+        fade = QPropertyAnimation(effect, b"opacity", self)
+        fade.setDuration(240)
+        fade.setStartValue(0.18)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
+        slide = QPropertyAnimation(page, b"pos", self)
+        slide.setDuration(260)
+        slide.setStartValue(end_position + QPoint(0, 14))
+        slide.setEndValue(end_position)
+        slide.setEasingCurve(QEasingCurve.OutCubic)
+        self.page_animation = QParallelAnimationGroup(self)
+        self.page_animation.addAnimation(fade)
+        self.page_animation.addAnimation(slide)
+        self.page_animation.finished.connect(
+            lambda current=page, position=end_position: (
+                current.move(position),
+                current.setGraphicsEffect(None),
+            )
+        )
         self.page_animation.start()
 
     def go_to_page(self, name):
@@ -923,7 +1013,7 @@ class MainWindow(QMainWindow):
             "Quỹ phép": "/api/v1/leave-balances",
             "Cảnh báo": "/api/v1/security-alerts?status=OPEN",
             "Xác minh ngẫu nhiên": "/api/v1/random-checks",
-            "Thiết bị": "/api/v1/devices",
+            "Phê duyệt thiết bị": "/api/v1/devices",
             "Client kết nối": "/api/v1/clients",
             "Tài khoản": "/api/v1/users",
             "Báo cáo": "/api/v1/reports/attendance",
@@ -954,9 +1044,10 @@ class MainWindow(QMainWindow):
                 ("Xác nhận", lambda: self.review(table, "alert", True)),
                 ("Bỏ cảnh báo", lambda: self.review(table, "alert", False)),
             ],
-            "Thiết bị": [
+            "Phê duyệt thiết bị": [
                 ("Phê duyệt", lambda: self.approve_device(table, True)),
                 ("Thu hồi", lambda: self.approve_device(table, False)),
+                ("Xóa thiết bị cũ", lambda: self.remove_device(table)),
             ],
             "Báo cáo": [
                 ("Xuất Excel", lambda: self.export_report("xlsx", table)),
@@ -1023,11 +1114,6 @@ class MainWindow(QMainWindow):
             ],
             "Xác minh ngẫu nhiên": [
                 ("Xóa", lambda: self.delete_record(table, "random-checks")),
-            ],
-            "Thiết bị": [
-                ("Phê duyệt", lambda: self.approve_device(table, True)),
-                ("Thu hồi", lambda: self.approve_device(table, False)),
-                ("Xóa", lambda: self.delete_record(table, "devices")),
             ],
             "Tài khoản": [
                 ("Đổi vai trò", lambda: self.change_role(table)),
@@ -1611,6 +1697,30 @@ class MainWindow(QMainWindow):
             except ApiError as exc:
                 QMessageBox.warning(self, "Không cập nhật được thiết bị", str(exc))
 
+    def remove_device(self, table):
+        row = self.selected(table)
+        if not row:
+            return
+        message = (
+            f"Xóa thiết bị {row.get('device_name') or '#' + str(row['id'])} của "
+            f"{row.get('full_name') or 'nhân viên này'}?\n\n"
+            "Thiết bị sẽ bị thu hồi quyền chấm công. Nếu đã có lịch sử chấm công, "
+            "hệ thống sẽ lưu trữ thiết bị thay vì xóa lịch sử."
+        )
+        if QMessageBox.question(self, "Xóa thiết bị cũ", message) != QMessageBox.Yes:
+            return
+        try:
+            result = self.api.request("DELETE", f"/api/v1/devices/{row['id']}")
+            notice = (
+                "Đã lưu trữ và thu hồi thiết bị cũ."
+                if result.get("archived")
+                else "Đã xóa thiết bị cũ."
+            )
+            self.show_toast(notice)
+            self.load_table(table, "/api/v1/devices")
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không xóa được thiết bị", str(exc))
+
     def toggle_employee(self, table):
         row = self.selected(table)
         if row:
@@ -1814,6 +1924,46 @@ class MainWindow(QMainWindow):
         except (OSError, ApiError) as exc:
             QMessageBox.warning(self, "Không xuất được báo cáo", str(exc))
 
+    def export_table_csv(self, table):
+        if table.rowCount() == 0 or table.columnCount() == 0:
+            QMessageBox.information(
+                self, "Chưa có dữ liệu", "Không có dữ liệu đang hiển thị để xuất file."
+            )
+            return
+        page_name = str(table.property("page_name") or "bao_cao")
+        safe_name = "".join(character if character.isalnum() else "_" for character in page_name)
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Xuất dữ liệu đang hiển thị",
+            f"{safe_name}.csv",
+            "CSV UTF-8 (*.csv)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".csv"):
+            path += ".csv"
+        try:
+            with open(path, "w", encoding="utf-8-sig", newline="") as stream:
+                writer = csv.writer(stream)
+                writer.writerow(
+                    [
+                        table.horizontalHeaderItem(column).text()
+                        if table.horizontalHeaderItem(column)
+                        else f"Cột {column + 1}"
+                        for column in range(table.columnCount())
+                    ]
+                )
+                for row in range(table.rowCount()):
+                    writer.writerow(
+                        [
+                            table.item(row, column).text() if table.item(row, column) else ""
+                            for column in range(table.columnCount())
+                        ]
+                    )
+            self.show_toast(f"Đã xuất dữ liệu: {path}")
+        except OSError as exc:
+            QMessageBox.warning(self, "Không xuất được file", str(exc))
+
     def refresh_dashboard(self):
         if hasattr(self, "metrics") or hasattr(self, "admin_metrics"):
             try:
@@ -1826,8 +1976,11 @@ class MainWindow(QMainWindow):
                 if hasattr(self, "chart_values"):
                     for index, key in enumerate(getattr(self, "metrics", {})):
                         self.chart_values.replace(index, float(data.get(key, 0)))
-            except ApiError:
+            except ApiError as exc:
                 self.connection_state(False)
+                if not self._dashboard_error_shown:
+                    self._dashboard_error_shown = True
+                    self.show_toast(f"Không cập nhật được tổng quan: {exc}", error=True)
 
     @staticmethod
     def vietnamese_weekday(weekday):
@@ -1990,6 +2143,16 @@ class MainWindow(QMainWindow):
     def connection_state(self, connected):
         self.connection.setText("● Đã kết nối" if connected else "● Mất kết nối — đang thử lại")
         self.connection.setStyleSheet("color: #22C55E" if connected else "color: #EF4444")
+        if connected:
+            self._dashboard_error_shown = False
+            self._realtime_error_shown = False
+
+    def realtime_error(self, message):
+        self.connection_state(False)
+        self.connection.setToolTip(message)
+        if not self._realtime_error_shown:
+            self._realtime_error_shown = True
+            self.show_toast(message, error=True)
 
     def toggle_theme(self):
         self.dark = not self.dark
