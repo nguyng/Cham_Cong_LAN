@@ -60,9 +60,12 @@ htmlcov/
 backups/
 exports/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 server/.env
 client/config.json
+client/device.id
 dist/
 build/
 *.spec

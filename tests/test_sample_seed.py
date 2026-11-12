@@ -5,7 +5,15 @@ from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
+from scripts import seed_sample_data
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_seed_default_targets_source_server_database(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["seed_sample_data.py"])
+    options = seed_sample_data.arguments()
+    assert options.database == ROOT / "server" / "data" / "attendance.db"
 
 
 def test_seed_data_is_repeatable_and_creates_five_samples():

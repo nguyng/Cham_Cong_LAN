@@ -4,45 +4,58 @@ Hệ thống chấm công nội bộ gồm Server FastAPI, ứng dụng nhân vi
 ứng dụng quản lý PySide6. Dữ liệu được lưu tập trung bằng SQLite trên máy
 Server; Client không truy cập trực tiếp database.
 
-## Chạy nhanh bản portable
+## Chạy nhanh từ mã nguồn
 
-Mở PowerShell tại thư mục `Cham_Cong_LAN` và chạy:
+Mở PowerShell tại thư mục `Cham_Cong_LAN`. Nếu đây là lần chạy đầu tiên, cài môi trường bằng:
 
 ```powershell
-$root = Resolve-Path ".\dist_portable"
-$serverDir = Join-Path $root "AttendanceServer"
-$adminDir = Join-Path $root "AttendanceAdmin"
-$clientDir = Join-Path $root "AttendanceClient"
-
-$server = Start-Process "$serverDir\AttendanceServer.exe" -WorkingDirectory $serverDir -PassThru
-Start-Sleep -Seconds 4
-$admin = Start-Process "$adminDir\AttendanceAdmin.exe" -WorkingDirectory $adminDir -PassThru
-$client = Start-Process "$clientDir\AttendanceClient.exe" -WorkingDirectory $clientDir -PassThru
-
-try {
-    while (-not $admin.HasExited -or -not $client.HasExited) {
-        Start-Sleep -Seconds 1
-        $admin.Refresh()
-        $client.Refresh()
-    }
-}
-finally {
-    foreach ($process in @($client, $admin, $server)) {
-        if ($null -ne $process -and -not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force
-        }
-    }
-}
+.\scripts\setup.ps1
 ```
 
-Server hiện trong cửa sổ console riêng. Khi Admin và Client đã đóng, lệnh
-trên sẽ dừng Server để không chạy ngầm.
-
-Dừng khẩn cấp tất cả tiến trình:
+Sau đó dán nguyên khối lệnh dưới đây để mở ba cửa sổ terminal riêng cho Server, Admin và User:
 
 ```powershell
-Get-Process AttendanceServer,AttendanceAdmin,AttendanceClient `
-    -ErrorAction SilentlyContinue | Stop-Process -Force
+if (-not (Test-Path '.\.venv\Scripts\python.exe') -or -not (Test-Path '.\server\.env')) {
+    .\scripts\setup.ps1
+}
+
+$root = (Resolve-Path '.').Path
+$python = (Resolve-Path '.\.venv\Scripts\python.exe').Path
+$safeRoot = $root.Replace("'", "''")
+$safePython = $python.Replace("'", "''")
+
+$serverCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' server_launcher.py"
+$server = Start-Process powershell.exe -PassThru -ArgumentList @('-NoProfile', '-Command', $serverCommand)
+
+$ready = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    if ($server.HasExited) { throw 'Server đã dừng trước khi khởi động xong. Hãy xem lỗi trong cửa sổ Server.' }
+    try {
+        Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 1 | Out-Null
+        $ready = $true
+        break
+    } catch {
+        Start-Sleep -Milliseconds 500
+        $server.Refresh()
+    }
+}
+if (-not $ready) { throw 'Server không sẵn sàng sau 15 giây. Hãy xem lỗi trong cửa sổ Server.' }
+
+$adminCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' admin_launcher.py"
+$userCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' client_launcher.py"
+Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $adminCommand)
+Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $userCommand)
+```
+
+Không dùng `python -m app.main` trong PowerShell con. `client_launcher.py` tự thiết lập đúng đường dẫn module và luôn mở cổng đăng nhập User; `admin_launcher.py` mở cổng Admin/Manager.
+
+Dừng khẩn cấp các tiến trình Python của riêng dự án khi cần:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -in @('python.exe', 'pythonw.exe') -and
+    $_.CommandLine -match 'server_launcher|admin_launcher|client_launcher'
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 ```
 
 ## Tài khoản mẫu

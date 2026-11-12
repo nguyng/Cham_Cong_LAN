@@ -100,6 +100,12 @@ def main(admin_only: bool = False):
     def show_login():
         login = LoginDialog(api, admin_only=admin_only)
         active_windows["login"] = login
+        # Calling show explicitly before entering the modal loop makes the login
+        # window reliably visible and brings it in front of the PowerShell
+        # windows used to launch the three source applications on Windows.
+        login.show()
+        login.raise_()
+        login.activateWindow()
         if login.exec() != LoginDialog.Accepted:
             active_windows["login"] = None
             login.deleteLater()

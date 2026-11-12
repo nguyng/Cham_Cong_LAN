@@ -258,6 +258,12 @@ class DummyLogin:
     def __init__(self, api, admin_only=False):
         self.api = api
         self.admin_only = admin_only
+    def show(self):
+        pass
+    def raise_(self):
+        pass
+    def activateWindow(self):
+        pass
     def exec(self):
         login_count["value"] += 1
         if login_count["value"] == 1:

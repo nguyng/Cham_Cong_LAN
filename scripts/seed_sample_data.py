@@ -25,7 +25,7 @@ def arguments():
     parser.add_argument(
         "--database",
         type=Path,
-        default=ROOT / "dist_portable" / "AttendanceServer" / "data" / "attendance.db",
+        default=SERVER_ROOT / "data" / "attendance.db",
         help="Đường dẫn SQLite cần nạp dữ liệu",
     )
     parser.add_argument(
