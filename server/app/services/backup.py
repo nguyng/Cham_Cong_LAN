@@ -17,17 +17,23 @@ def backup_database() -> Path:
     database_path = sqlite_database_path(get_settings().database_url)
     if database_path == Path(":memory:"):
         raise ValueError("Không thể sao lưu database SQLite in-memory")
+    if not database_path.is_file():
+        raise ValueError("Không tìm thấy database SQLite cần sao lưu")
     target = _backup_path()
     source = sqlite3.connect(database_path, timeout=30)
     destination = sqlite3.connect(target, timeout=30)
+    completed = False
     try:
         source.backup(destination)
         result = destination.execute("PRAGMA integrity_check").fetchone()[0]
         if result != "ok":
             raise RuntimeError(f"Bản sao lưu SQLite không toàn vẹn: {result}")
+        completed = True
     finally:
         destination.close()
         source.close()
+        if not completed:
+            target.unlink(missing_ok=True)
     return target
 
 

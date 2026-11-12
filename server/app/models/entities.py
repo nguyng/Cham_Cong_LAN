@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -104,6 +105,9 @@ class Employee(Base, TimestampMixin):
     department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"), index=True)
     position_id: Mapped[int | None] = mapped_column(ForeignKey("positions.id"))
     hire_date: Mapped[date | None] = mapped_column(Date)
+    base_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    attendance_bonus: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    overtime_multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("1.50"))
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     department: Mapped[Department | None] = relationship(foreign_keys=[department_id])
     position: Mapped[Position | None] = relationship(foreign_keys=[position_id])
@@ -166,6 +170,14 @@ class AttendanceRecord(Base, TimestampMixin):
     check_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     check_in_ip: Mapped[str] = mapped_column(String(64))
     check_out_ip: Mapped[str | None] = mapped_column(String(64))
+    check_in_latitude: Mapped[float | None] = mapped_column(Float)
+    check_in_longitude: Mapped[float | None] = mapped_column(Float)
+    check_in_accuracy_meters: Mapped[float | None] = mapped_column(Float)
+    check_out_latitude: Mapped[float | None] = mapped_column(Float)
+    check_out_longitude: Mapped[float | None] = mapped_column(Float)
+    check_out_accuracy_meters: Mapped[float | None] = mapped_column(Float)
+    check_in_geofence_distance_meters: Mapped[float | None] = mapped_column(Float)
+    check_out_geofence_distance_meters: Mapped[float | None] = mapped_column(Float)
     device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id"))
     status: Mapped[AttendanceStatus] = mapped_column(
         Enum(AttendanceStatus), default=AttendanceStatus.OPEN
@@ -174,6 +186,12 @@ class AttendanceRecord(Base, TimestampMixin):
     early_leave_minutes: Mapped[int] = mapped_column(Integer, default=0)
     worked_minutes: Mapped[int] = mapped_column(Integer, default=0)
     break_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    overtime_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    approved_overtime_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    overtime_status: Mapped[str] = mapped_column(String(30), default="NONE", index=True)
+    overtime_reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    overtime_review_note: Mapped[str | None] = mapped_column(Text)
+    overtime_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspicious: Mapped[bool] = mapped_column(Boolean, default=False)
     employee: Mapped[Employee] = relationship()
     shift: Mapped[Shift] = relationship()

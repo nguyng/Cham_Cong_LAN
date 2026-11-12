@@ -1,7 +1,11 @@
 from datetime import date, timedelta
+from io import BytesIO
 
 from app.database.session import SessionLocal
 from app.models.entities import Employee, LeaveBalance, RandomCheck
+from app.services.reporting import excel_report, pdf_report, register_pdf_fonts
+from openpyxl import load_workbook
+from reportlab.pdfbase import pdfmetrics
 
 
 def test_leave_request_and_approval(client, employee_headers, manager_headers):
@@ -129,5 +133,38 @@ def test_excel_pdf_exports(
     assert report.status_code == 200 and len(report.json()) == 1
     excel = client.get("/api/v1/reports/attendance.xlsx", params=params, headers=manager_headers)
     assert excel.status_code == 200 and excel.content.startswith(b"PK")
+    workbook = load_workbook(BytesIO(excel.content))
+    sheet = workbook["Báo cáo chấm công"]
+    assert sheet["A1"].value == "HỆ THỐNG CHẤM CÔNG LAN — BÁO CÁO CHẤM CÔNG"
+    assert sheet["A4"].font.bold is True
+    assert sheet.freeze_panes == "A5"
+    assert "BaoCaoChamCong" in sheet.tables
     pdf = client.get("/api/v1/reports/attendance.pdf", params=params, headers=manager_headers)
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+
+
+def test_pdf_font_contains_vietnamese_glyphs():
+    regular, bold = register_pdf_fonts()
+
+    for font_name in (regular, bold):
+        font = pdfmetrics.getFont(font_name)
+        assert all(ord(char) in font.face.charToGlyph for char in "Đặng Nguyễn Trường")
+
+
+def test_server_reports_escape_formula_and_markup_text():
+    rows = [
+        {
+            "employee_code": "=1+1",
+            "full_name": "A & B <không phải markup>",
+            "work_days": 1,
+            "hours": 8,
+            "late_count": 0,
+            "early_count": 0,
+            "leave_days": 0,
+        }
+    ]
+
+    sheet = load_workbook(BytesIO(excel_report(rows))).active
+    assert sheet["A5"].value == "'=1+1"
+    assert sheet["B5"].value == "A & B <không phải markup>"
+    assert pdf_report(rows).startswith(b"%PDF")

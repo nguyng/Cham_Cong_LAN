@@ -1,26 +1,47 @@
 import json
 from datetime import UTC, datetime
 
-from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView
-from PySide6.QtCore import QDate, QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter
+from PySide6.QtCharts import (
+    QBarCategoryAxis,
+    QBarSeries,
+    QBarSet,
+    QChart,
+    QChartView,
+)
+from PySide6.QtCore import (
+    QDate,
+    QEasingCurve,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractScrollArea,
     QApplication,
     QComboBox,
     QDateEdit,
     QFileDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLayout,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -30,360 +51,148 @@ from PySide6.QtWidgets import (
 
 from app.network.api import ApiError
 from app.network.realtime import RealtimeThread
+from app.ui.attendance_portal import AttendancePortalMixin
+from app.ui.catalog import (
+    ADMIN_PAGES,
+    COLUMN_LABELS,
+    EMPLOYEE_PAGES,
+    MANAGEMENT_NAV_SECTIONS,
+    MANAGER_PAGES,
+    PAGE_DESCRIPTIONS,
+    STATUS_TEXT,
+    TABLE_COLUMNS,
+)
 from app.ui.dialogs import Field, FormDialog
+from app.ui.excel_export import styled_workbook_bytes
+from app.ui.icons import decorate_button
+from app.ui.leave_portal import LeavePortalMixin
+from app.ui.payroll_ui import PayrollUiMixin
 from app.ui.style import ADMIN_DARK, ADMIN_LIGHT, DARK, LIGHT
 
-EMPLOYEE_PAGES = [
-    "Tổng quan",
-    "Chấm công",
-    "Lịch sử",
-    "Lịch làm việc",
-    "Nghỉ phép",
-    "Thông báo",
-    "Hồ sơ cá nhân",
-]
-ADMIN_PAGES = [
-    "Trung tâm điều hành",
-    "Quản lý nhân viên",
-    "Phòng ban",
-    "Chức vụ",
-    "Ca làm",
-    "Phân ca",
-    "Quản lý chấm công",
-    "Duyệt điều chỉnh",
-    "Duyệt nghỉ phép",
-    "Loại nghỉ phép",
-    "Quỹ phép",
-    "Cảnh báo",
-    "Xác minh ngẫu nhiên",
-    "Thiết bị",
-    "Client kết nối",
-    "Tài khoản",
-    "Báo cáo",
-    "Cấu hình hệ thống",
-    "Nhật ký",
-]
-MANAGER_PAGES = [
-    "Trung tâm điều hành",
-    "Quản lý nhân viên",
-    "Phân ca",
-    "Quản lý chấm công",
-    "Duyệt điều chỉnh",
-    "Duyệt nghỉ phép",
-    "Quỹ phép",
-    "Cảnh báo",
-    "Xác minh ngẫu nhiên",
-    "Thiết bị",
-    "Báo cáo",
-]
-
-PAGE_ICONS = {
-    "Tổng quan": "⌂",
-    "Chấm công": "◷",
-    "Lịch sử": "≡",
-    "Lịch làm việc": "▦",
-    "Nghỉ phép": "◇",
-    "Thông báo": "●",
-    "Hồ sơ cá nhân": "○",
-    "Trung tâm điều hành": "◆",
-    "Quản lý nhân viên": "♙",
-    "Phòng ban": "▤",
-    "Chức vụ": "▣",
-    "Ca làm": "◴",
-    "Phân ca": "▦",
-    "Quản lý chấm công": "✓",
-    "Duyệt điều chỉnh": "↻",
-    "Duyệt nghỉ phép": "◇",
-    "Loại nghỉ phép": "◈",
-    "Quỹ phép": "⊕",
-    "Cảnh báo": "!",
-    "Xác minh ngẫu nhiên": "◎",
-    "Thiết bị": "▱",
-    "Client kết nối": "⌁",
-    "Tài khoản": "♙",
-    "Báo cáo": "▥",
-    "Cấu hình hệ thống": "⚙",
-    "Nhật ký": "≣",
-}
-
-PAGE_DESCRIPTIONS = {
-    "Tổng quan": "Tóm tắt tình trạng chấm công và yêu cầu của bạn trong ngày.",
-    "Chấm công": "Check-in và check-out bằng thời gian chính thức từ Server.",
-    "Lịch sử": "Tra cứu lịch sử và gửi yêu cầu điều chỉnh chấm công.",
-    "Lịch làm việc": "Theo dõi ca làm đã được phân công theo ngày.",
-    "Nghỉ phép": "Tạo và theo dõi trạng thái các đơn nghỉ phép.",
-    "Thông báo": "Thông báo nghiệp vụ và kết quả phê duyệt từ Server.",
-    "Hồ sơ cá nhân": "Thông tin tài khoản và hồ sơ nhân viên hiện tại.",
-    "Trung tâm điều hành": "Theo dõi toàn hệ thống và truy cập nhanh các tác vụ quản trị.",
-    "Quản lý nhân viên": "Thêm, cập nhật, tìm kiếm và quản lý trạng thái nhân viên.",
-    "Phòng ban": "Thiết lập cơ cấu phòng ban và người quản lý.",
-    "Chức vụ": "Quản lý danh mục chức vụ trong doanh nghiệp.",
-    "Ca làm": "Thiết lập giờ làm, giờ nghỉ và quy tắc đi muộn/về sớm.",
-    "Phân ca": "Phân ca theo khoảng ngày và ngày làm việc trong tuần.",
-    "Quản lý chấm công": "Theo dõi bản ghi chấm công theo thời gian và nhân viên.",
-    "Duyệt điều chỉnh": "Duyệt hoặc từ chối các yêu cầu điều chỉnh công.",
-    "Duyệt nghỉ phép": "Xử lý các đơn nghỉ phép đang chờ duyệt.",
-    "Loại nghỉ phép": "Thiết lập loại phép, hưởng lương và quy tắc trừ quỹ.",
-    "Quỹ phép": "Cấp và cập nhật số ngày phép theo nhân viên, năm và loại phép.",
-    "Cảnh báo": "Kiểm tra và xử lý thủ công các dấu hiệu bất thường.",
-    "Xác minh ngẫu nhiên": "Theo dõi kết quả các yêu cầu xác minh hiện diện.",
-    "Thiết bị": "Phê duyệt hoặc thu hồi thiết bị được phép chấm công.",
-    "Client kết nối": "Danh sách tài khoản đang kết nối thời gian thực tới Server.",
-    "Tài khoản": "Quản lý vai trò và mở khóa tài khoản.",
-    "Báo cáo": "Lọc, xem và xuất báo cáo Excel/PDF theo thời gian và nhân sự.",
-    "Cấu hình hệ thống": "Cập nhật cấu hình vận hành, sao lưu và khôi phục dữ liệu.",
-    "Nhật ký": "Theo dõi đăng nhập và các thay đổi quan trọng trong hệ thống.",
-}
-
-TABLE_COLUMNS = {
-    "Lịch sử": [
-        "id",
-        "work_date",
-        "check_in_at",
-        "check_out_at",
-        "status",
-        "worked_minutes",
-        "late_minutes",
-        "early_leave_minutes",
-    ],
-    "Lịch làm việc": ["id", "work_date", "shift_name", "employee_id"],
-    "Nghỉ phép": [
-        "id",
-        "leave_type_name",
-        "start_date",
-        "end_date",
-        "days",
-        "reason",
-        "status",
-        "review_note",
-    ],
-    "Thông báo": ["id", "title", "message", "category", "read_at", "created_at"],
-    "Hồ sơ cá nhân": ["id", "username", "role", "employee"],
-    "Quản lý nhân viên": [
-        "id",
-        "employee_code",
-        "full_name",
-        "email",
-        "phone",
-        "department_name",
-        "position_name",
-        "hire_date",
-        "active",
-    ],
-    "Phòng ban": ["id", "code", "name", "manager_name", "active"],
-    "Chức vụ": ["id", "code", "name", "active"],
-    "Ca làm": [
-        "id",
-        "code",
-        "name",
-        "start_time",
-        "end_time",
-        "break_minutes",
-        "late_grace_minutes",
-        "early_grace_minutes",
-        "active",
-    ],
-    "Phân ca": ["id", "work_date", "employee_code", "full_name", "shift_name"],
-    "Quản lý chấm công": [
-        "id",
-        "employee_code",
-        "full_name",
-        "work_date",
-        "check_in_at",
-        "check_out_at",
-        "status",
-        "worked_minutes",
-        "late_minutes",
-        "early_leave_minutes",
-    ],
-    "Duyệt điều chỉnh": [
-        "id",
-        "attendance_id",
-        "employee_code",
-        "full_name",
-        "work_date",
-        "proposed_check_in",
-        "proposed_check_out",
-        "reason",
-        "status",
-        "review_note",
-    ],
-    "Duyệt nghỉ phép": [
-        "id",
-        "employee_code",
-        "full_name",
-        "leave_type_name",
-        "start_date",
-        "end_date",
-        "days",
-        "reason",
-        "status",
-    ],
-    "Loại nghỉ phép": ["id", "code", "name", "paid", "deduct_balance", "active"],
-    "Quỹ phép": [
-        "id",
-        "employee_code",
-        "full_name",
-        "leave_type_name",
-        "year",
-        "allocated_days",
-        "used_days",
-        "remaining_days",
-    ],
-    "Cảnh báo": [
-        "id",
-        "employee_code",
-        "full_name",
-        "type",
-        "severity",
-        "description",
-        "status",
-        "created_at",
-    ],
-    "Xác minh ngẫu nhiên": [
-        "id",
-        "employee_code",
-        "full_name",
-        "sent_at",
-        "expires_at",
-        "responded_at",
-        "result",
-        "response_ip",
-    ],
-    "Thiết bị": [
-        "id",
-        "employee_code",
-        "full_name",
-        "device_name",
-        "approved",
-        "active",
-        "last_ip",
-        "last_seen_at",
-    ],
-    "Client kết nối": ["user_id", "username", "role", "employee_id", "connections"],
-    "Tài khoản": ["id", "username", "role", "employee_id", "active", "locked_until"],
-    "Báo cáo": [
-        "employee_id",
-        "employee_code",
-        "full_name",
-        "department",
-        "work_days",
-        "hours",
-        "late_count",
-        "early_count",
-        "leave_days",
-    ],
-    "Cấu hình hệ thống": ["key", "value", "description"],
-    "Nhật ký": ["id", "created_at", "user_id", "action", "entity_type", "entity_id", "client_ip"],
-}
-
-COLUMN_LABELS = {
-    "id": "ID",
-    "user_id": "Người dùng",
-    "employee_id": "Nhân viên",
-    "employee_code": "Mã NV",
-    "full_name": "Họ tên",
-    "username": "Tài khoản",
-    "role": "Vai trò",
-    "email": "Email",
-    "phone": "Điện thoại",
-    "department": "Phòng ban",
-    "department_id": "Phòng ban",
-    "department_name": "Phòng ban",
-    "position_id": "Chức vụ",
-    "position_name": "Chức vụ",
-    "hire_date": "Ngày vào làm",
-    "active": "Hoạt động",
-    "code": "Mã",
-    "name": "Tên",
-    "manager_employee_id": "Quản lý",
-    "manager_name": "Người quản lý",
-    "start_time": "Bắt đầu",
-    "end_time": "Kết thúc",
-    "break_minutes": "Nghỉ (phút)",
-    "late_grace_minutes": "Ân hạn muộn",
-    "early_grace_minutes": "Ân hạn sớm",
-    "work_date": "Ngày làm",
-    "shift_id": "Ca",
-    "shift_name": "Tên ca",
-    "check_in_at": "Check-in",
-    "check_out_at": "Check-out",
-    "status": "Trạng thái",
-    "worked_minutes": "Phút làm",
-    "late_minutes": "Phút muộn",
-    "early_leave_minutes": "Phút sớm",
-    "leave_type_id": "Loại phép",
-    "leave_type_name": "Loại phép",
-    "start_date": "Từ ngày",
-    "end_date": "Đến ngày",
-    "days": "Số ngày",
-    "reason": "Lý do",
-    "review_note": "Ghi chú duyệt",
-    "title": "Tiêu đề",
-    "message": "Nội dung",
-    "category": "Loại",
-    "read_at": "Đã đọc lúc",
-    "created_at": "Thời gian",
-    "employee": "Hồ sơ",
-    "attendance_id": "Bản ghi công",
-    "requested_by": "Người yêu cầu",
-    "proposed_check_in": "Check-in đề xuất",
-    "proposed_check_out": "Check-out đề xuất",
-    "paid": "Có lương",
-    "deduct_balance": "Trừ quỹ",
-    "year": "Năm",
-    "allocated_days": "Được cấp",
-    "used_days": "Đã dùng",
-    "remaining_days": "Còn lại",
-    "type": "Loại",
-    "severity": "Mức độ",
-    "description": "Mô tả",
-    "sent_at": "Gửi lúc",
-    "expires_at": "Hết hạn",
-    "responded_at": "Phản hồi lúc",
-    "result": "Kết quả",
-    "response_ip": "IP phản hồi",
-    "device_name": "Thiết bị",
-    "approved": "Đã duyệt",
-    "last_ip": "IP gần nhất",
-    "last_seen_at": "Hoạt động cuối",
-    "connections": "Số kết nối",
-    "locked_until": "Khóa đến",
-    "work_days": "Ngày công",
-    "hours": "Giờ làm",
-    "late_count": "Lần muộn",
-    "early_count": "Lần về sớm",
-    "leave_days": "Ngày phép",
-    "key": "Khóa cấu hình",
-    "value": "Giá trị",
-    "action": "Hành động",
-    "entity_type": "Đối tượng",
-    "entity_id": "ID đối tượng",
-    "client_ip": "IP Client",
-}
-
-STATUS_TEXT = {
-    "PENDING": "Chờ duyệt",
-    "APPROVED": "Đã duyệt",
-    "REJECTED": "Từ chối",
-    "CANCELLED": "Đã hủy",
-    "ON_TIME": "Đúng giờ",
-    "LATE": "Đi muộn",
-    "EARLY_LEAVE": "Về sớm",
-    "LATE_AND_EARLY": "Muộn & về sớm",
-    "OPEN": "Đang mở",
-    "CONFIRMED": "Đã xác nhận",
-    "DISMISSED": "Đã bỏ qua",
-    "VERIFIED": "Đã xác minh",
-    "MISSED": "Không phản hồi",
-    "ADMIN": "Quản trị",
-    "MANAGER": "Quản lý",
-    "EMPLOYEE": "Nhân viên",
-}
+from ..files import write_bytes_atomic
 
 
-class MainWindow(QMainWindow):
+class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainWindow):
     session_ended = Signal(bool)
+
+    @staticmethod
+    def add_shadow(widget, blur=24, y_offset=6, alpha=38):
+        shadow = QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(blur)
+        shadow.setOffset(0, y_offset)
+        shadow.setColor(QColor(15, 23, 42, alpha))
+        widget.setGraphicsEffect(shadow)
+
+    @staticmethod
+    def configure_table(table: QTableWidget) -> None:
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SingleSelection)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setWordWrap(False)
+        table.setTextElideMode(Qt.ElideRight)
+        table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        table.setShowGrid(False)
+        table.setCornerButtonEnabled(False)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setDefaultSectionSize(42)
+        header = table.horizontalHeader()
+        header.setFixedHeight(44)
+        header.setMinimumSectionSize(76)
+        header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        header.setSectionsClickable(True)
+        header.setHighlightSections(False)
+
+    @staticmethod
+    def fit_table_columns(table: QTableWidget, columns: list[str]) -> None:
+        compact = {"id", "active", "approved", "paid", "deduct_balance", "year"}
+        wide = {
+            "full_name",
+            "email",
+            "reason",
+            "description",
+            "message",
+            "employee",
+            "review_note",
+        }
+        medium = {
+            "employee_code",
+            "department_name",
+            "position_name",
+            "status",
+            "device_name",
+            "username",
+            "role",
+        }
+        coordinates = {
+            "check_in_latitude",
+            "check_in_longitude",
+            "check_out_latitude",
+            "check_out_longitude",
+        }
+        for index, key in enumerate(columns):
+            minimum = 72 if key in compact else 185 if key in wide else 135 if key in medium else 112
+            if key in coordinates:
+                minimum = 128
+            table.setColumnWidth(index, min(280, max(minimum, table.columnWidth(index))))
+            header_item = table.horizontalHeaderItem(index)
+            if header_item:
+                header_item.setToolTip(header_item.text())
+        table.horizontalHeader().setStretchLastSection(len(columns) <= 5)
+
+    @staticmethod
+    def toolbar_scroller(content: QWidget, height: int = 72) -> QScrollArea:
+        content_layout = content.layout()
+        if content_layout:
+            content_layout.setSizeConstraint(QLayout.SetMinimumSize)
+        content.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        content.adjustSize()
+        scroller = QScrollArea(objectName="toolbarScroll")
+        scroller.setSizeAdjustPolicy(QAbstractScrollArea.AdjustIgnored)
+        scroller.setWidgetResizable(False)
+        scroller.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        scroller.setMinimumWidth(0)
+        scroller.setFrameShape(QFrame.NoFrame)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroller.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroller.setMinimumHeight(height)
+        scroller.setMaximumHeight(height + 12)
+        scroller.setWidget(content)
+        return scroller
+
+    @staticmethod
+    def vertical_page_scroller(content: QWidget) -> QScrollArea:
+        if content.layout():
+            content.layout().activate()
+        content.setMinimumWidth(0)
+        content.setMinimumHeight(content.sizeHint().height())
+        scroller = QScrollArea(objectName="pageScroll")
+        scroller.setWidgetResizable(True)
+        scroller.setFrameShape(QFrame.NoFrame)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroller.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroller.setWidget(content)
+        return scroller
+
+    def apply_control_design(self) -> None:
+        for button in self.findChildren(QPushButton):
+            navigation = bool(button.property("nav"))
+            decorate_button(button, navigation=navigation)
+            if button.property("attendanceAction"):
+                button.setMinimumHeight(58)
+                button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        for scroller in self.findChildren(QScrollArea, "toolbarScroll"):
+            content = scroller.widget()
+            if content and content.layout():
+                content.layout().activate()
+                hint = content.sizeHint()
+                content.resize(QSize(max(1, hint.width()), max(1, hint.height())))
+        for scroller in self.findChildren(QScrollArea, "pageScroll"):
+            content = scroller.widget()
+            if content and content.layout():
+                content.layout().activate()
+                content.setMinimumHeight(content.sizeHint().height())
 
     def __init__(self, api, admin_only=False):
         super().__init__()
@@ -399,13 +208,18 @@ class MainWindow(QMainWindow):
         self.nav_buttons = []
         self._logout_requested = False
         self._session_end_emitted = False
+        self._dashboard_error_shown = False
+        self._realtime_error_shown = False
+        self._realtime_ever_connected = False
+        self._local_server_shutdown_generation = 0
         self.setWindowTitle(
             "LAN Attendance — Trung tâm quản trị"
             if admin_only
             else "LAN Attendance — Cổng nhân viên"
         )
+        self.setMinimumSize(900, 600)
         self.resize(1360, 820)
-        shell = QWidget()
+        shell = QWidget(objectName="appShell")
         sidebar = QFrame(objectName="adminSidebar" if admin_only else "sidebar")
         root, sidebar_box = QHBoxLayout(shell), QVBoxLayout(sidebar)
         root.setContentsMargins(14, 14, 14, 14)
@@ -439,9 +253,13 @@ class MainWindow(QMainWindow):
         management_pages = ADMIN_PAGES if api.role == "ADMIN" else MANAGER_PAGES
         self.page_names = management_pages if admin_only else EMPLOYEE_PAGES
         for name in self.page_names:
-            label = f"{PAGE_ICONS.get(name, '•')}   {name}"
-            button, index = QPushButton(label), self.stack.count()
+            if admin_only and name in MANAGEMENT_NAV_SECTIONS:
+                section = QLabel(MANAGEMENT_NAV_SECTIONS[name], objectName="navSection")
+                section.setProperty("nav_section", True)
+                nav.addWidget(section)
+            button, index = QPushButton(name), self.stack.count()
             button.setProperty("nav", True)
+            button.setProperty("page_name", name)
             button.setCheckable(True)
             button.setMinimumHeight(40)
             button.clicked.connect(lambda _checked=False, i=index: self.show_page(i))
@@ -472,10 +290,21 @@ class MainWindow(QMainWindow):
         root.addWidget(self.stack, 1)
         self.setCentralWidget(shell)
         self.setStyleSheet(ADMIN_LIGHT if admin_only else LIGHT)
+        self.apply_control_design()
+        required_sidebar_width = max(
+            (button.minimumWidth() for button in self.nav_buttons),
+            default=sidebar.width(),
+        ) + 34
+        sidebar.setFixedWidth(max(sidebar.width(), min(370, required_sidebar_width)))
         if self.nav_buttons:
             self.nav_buttons[0].setChecked(True)
-        self.realtime = RealtimeThread(lambda: self.api.websocket_url, self)
+        self.realtime = RealtimeThread(
+            lambda: self.api.websocket_url,
+            self,
+            headers_factory=lambda: self.api.websocket_headers,
+        )
         self.realtime.connection_changed.connect(self.connection_state)
+        self.realtime.error.connect(self.realtime_error)
         self.realtime.message.connect(self.realtime_message)
         self.realtime.start()
         QTimer.singleShot(50, self.refresh_dashboard)
@@ -486,7 +315,7 @@ class MainWindow(QMainWindow):
                     self,
                     "Thiết bị mới",
                     "Máy này đã được đăng ký nhưng chưa được phê duyệt.\n\n"
-                    "Hãy mở AttendanceAdmin → Thiết bị → chọn máy này → Phê duyệt, "
+                    "Hãy mở AttendanceAdmin → Phê duyệt thiết bị → chọn máy này → Phê duyệt, "
                     "sau đó chấm công lại.",
                 ),
             )
@@ -497,13 +326,19 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(26, 18, 26, 18)
         header, header_box = QFrame(objectName="pageHeader"), QVBoxLayout()
         header.setLayout(header_box)
-        header_box.setContentsMargins(0, 0, 0, 5)
+        header_box.setContentsMargins(20, 14, 20, 14)
         header_box.addWidget(QLabel(name, objectName="title"))
-        header_box.addWidget(QLabel(PAGE_DESCRIPTIONS.get(name, ""), objectName="subtitle"))
+        subtitle = QLabel(PAGE_DESCRIPTIONS.get(name, ""), objectName="subtitle")
+        subtitle.setWordWrap(True)
+        header_box.addWidget(subtitle)
+        self.add_shadow(header, blur=22, y_offset=4, alpha=26)
         layout.addWidget(header)
         if name == "Trung tâm điều hành":
             self.build_admin_dashboard(layout)
-            return page
+            return self.vertical_page_scroller(page)
+        if name == "Lương & chuyên cần":
+            self.build_payroll_page(layout)
+            return self.vertical_page_scroller(page)
         if name == "Tổng quan":
             self.metrics, grid = {}, QGridLayout()
             metric_definitions = [
@@ -512,16 +347,21 @@ class MainWindow(QMainWindow):
                 ("pending_leave", "Đơn chờ duyệt"),
                 ("open_alerts", "Cảnh báo"),
             ]
+            tones = ("blue", "violet", "mint", "coral")
             for i, (key, label) in enumerate(metric_definitions):
                 card, box = QFrame(objectName="card"), QVBoxLayout()
+                card.setProperty("tone", tones[i % len(tones)])
                 card.setLayout(box)
                 box.addWidget(QLabel(label))
                 value = QLabel("—", objectName="metric")
                 box.addWidget(value)
                 self.metrics[key] = value
                 grid.addWidget(card, i // 2, i % 2)
+                self.add_shadow(card, blur=20, y_offset=5, alpha=24)
             layout.addLayout(grid)
             self.chart_values = QBarSet("Số lượng")
+            self.chart_values.setColor(QColor("#4F46E5"))
+            self.chart_values.setBorderColor(QColor("#4338CA"))
             self.chart_values.append([0] * len(metric_definitions))
             series = QBarSeries()
             series.append(self.chart_values)
@@ -529,6 +369,7 @@ class MainWindow(QMainWindow):
             chart.addSeries(series)
             chart.createDefaultAxes()
             chart.setTitle("Tình hình trong ngày")
+            chart.setTitleFont(QFont("Segoe UI", 12, QFont.DemiBold))
             chart.setAnimationOptions(QChart.SeriesAnimations)
             categories = QBarCategoryAxis()
             categories.append([label for _, label in metric_definitions])
@@ -544,6 +385,7 @@ class MainWindow(QMainWindow):
             return page
         if name == "Chấm công":
             hero = QFrame(objectName="attendanceHero")
+            self.add_shadow(hero, blur=34, y_offset=9, alpha=52)
             hero_box = QVBoxLayout(hero)
             hero_box.setContentsMargins(32, 26, 32, 26)
             hero_box.setSpacing(4)
@@ -563,17 +405,34 @@ class MainWindow(QMainWindow):
             layout.addWidget(hero)
 
             action_card = QFrame(objectName="attendanceActionCard")
+            self.add_shadow(action_card, blur=22, y_offset=5, alpha=26)
             action_box = QVBoxLayout(action_card)
             action_box.setContentsMargins(24, 20, 24, 20)
             action_box.setSpacing(14)
             action_box.addWidget(QLabel("Ghi nhận thời gian làm việc", objectName="sectionTitle"))
             action_box.addWidget(
                 QLabel(
-                    "Chọn thao tác phù hợp. Thời gian được lấy trực tiếp từ Server.",
+                    "Chọn thao tác phù hợp. Thời gian lấy từ Server và vị trí lấy từ GPS của máy.",
                     objectName="subtitle",
                 )
             )
-            buttons = QHBoxLayout()
+            gps_panel = QFrame(objectName="attendanceGpsPanel")
+            gps_box = QHBoxLayout(gps_panel)
+            gps_box.setContentsMargins(16, 12, 16, 12)
+            gps_icon = QLabel("⌖", objectName="gpsIcon")
+            gps_text = QVBoxLayout()
+            gps_text.setSpacing(2)
+            gps_text.addWidget(QLabel("VỊ TRÍ CHẤM CÔNG", objectName="gpsTitle"))
+            self.attendance_location = QLabel(
+                "GPS sẽ được xác định khi bạn nhấn CHECK-IN hoặc CHECK-OUT.",
+                objectName="gpsValue",
+            )
+            self.attendance_location.setWordWrap(True)
+            gps_text.addWidget(self.attendance_location)
+            gps_box.addWidget(gps_icon)
+            gps_box.addLayout(gps_text, 1)
+            action_box.addWidget(gps_panel)
+            buttons = QVBoxLayout()
             buttons.setSpacing(14)
             self.check_in_button = QPushButton("▶  CHECK-IN")
             self.check_in_button.setProperty("attendanceAction", "checkin")
@@ -595,6 +454,7 @@ class MainWindow(QMainWindow):
             summary = QGridLayout()
             summary.setHorizontalSpacing(14)
             self.attendance_summary = {}
+            summary_tones = ("violet", "mint", "coral", "blue")
             for column, (key, title, icon) in enumerate(
                 (
                     ("shift", "Ca làm hôm nay", "◷"),
@@ -604,6 +464,8 @@ class MainWindow(QMainWindow):
                 )
             ):
                 card = QFrame(objectName="attendanceSummaryCard")
+                card.setProperty("tone", summary_tones[column])
+                self.add_shadow(card, blur=18, y_offset=4, alpha=22)
                 card_box = QVBoxLayout(card)
                 card_box.setContentsMargins(18, 16, 18, 16)
                 card_box.addWidget(QLabel(f"{icon}  {title}", objectName="summaryTitle"))
@@ -618,7 +480,7 @@ class MainWindow(QMainWindow):
             notice_box.setContentsMargins(18, 12, 18, 12)
             notice_icon = QLabel("✓", objectName="noticeIcon")
             self.attendance_notice = QLabel(
-                "Thiết bị và kết nối LAN sẽ được xác minh khi chấm công.",
+                "Thiết bị, kết nối LAN và tọa độ GPS sẽ được xác minh khi chấm công.",
                 objectName="noticeText",
             )
             self.attendance_notice.setWordWrap(True)
@@ -627,17 +489,21 @@ class MainWindow(QMainWindow):
             layout.addWidget(notice)
 
             guide = QFrame(objectName="attendanceGuide")
+            self.add_shadow(guide, blur=20, y_offset=5, alpha=24)
             guide_box = QVBoxLayout(guide)
             guide_box.setContentsMargins(20, 16, 20, 16)
             guide_box.addWidget(QLabel("Quy trình chấm công an toàn", objectName="sectionTitle"))
             steps = QHBoxLayout()
             steps.setSpacing(12)
-            for number, title, description in (
+            for step_index, (number, title, description) in enumerate(
+                (
                 ("01", "Kiểm tra ca", "Xác nhận ca làm hôm nay trước khi bắt đầu."),
-                ("02", "Ghi nhận giờ vào", "CHECK-IN một lần khi bạn sẵn sàng làm việc."),
-                ("03", "Kết thúc ca", "CHECK-OUT trước khi rời khỏi thiết bị đã đăng ký."),
+                ("02", "Xác định GPS", "Cho phép Windows lấy kinh độ, vĩ độ rồi CHECK-IN."),
+                ("03", "Kết thúc ca", "CHECK-OUT để lưu thời gian và vị trí rời ca."),
+                )
             ):
                 step = QFrame(objectName="attendanceStep")
+                step.setProperty("tone", ("blue", "mint", "coral")[step_index])
                 step_box = QHBoxLayout(step)
                 step_box.setContentsMargins(14, 12, 14, 12)
                 badge = QLabel(number, objectName="stepNumber")
@@ -665,31 +531,35 @@ class MainWindow(QMainWindow):
             update_clock()
             timer.start(1000)
             QTimer.singleShot(120, self.refresh_attendance_panel)
-            return page
+            return self.vertical_page_scroller(page)
         toolbar, controls = QFrame(objectName="toolbar"), QHBoxLayout()
         toolbar.setLayout(controls)
-        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setContentsMargins(12, 10, 12, 10)
+        controls.setSpacing(8)
+        self.add_shadow(toolbar, blur=18, y_offset=4, alpha=20)
         table = QTableWidget()
         table.setProperty("page_name", name)
-        table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setEditTriggers(QTableWidget.NoEditTriggers)
-        table.verticalHeader().setVisible(False)
+        self.configure_table(table)
         endpoint = self.endpoint_for(name)
         self.add_page_filters(name, table, controls)
-        refresh = QPushButton("↻ Tải lại")
+        refresh = QPushButton("↻ Làm mới")
         refresh.setProperty("secondary", True)
-        refresh.clicked.connect(lambda _=False, t=table, e=endpoint: self.load_table(t, e))
+        refresh.setToolTip("Đặt lại bộ lọc, phân trang và tải dữ liệu mới nhất")
+        refresh.clicked.connect(lambda _=False, t=table, e=endpoint: self.refresh_table(t, e))
         controls.addWidget(refresh)
+        if self.admin_only:
+            export = QPushButton("⇩ Xuất Excel")
+            export.setProperty("secondary", True)
+            export.clicked.connect(lambda _=False, t=table: self.export_table_excel(t))
+            controls.addWidget(export)
         for label, handler in self.actions_for(name, table):
             button = QPushButton(label)
-            if label == "Xóa":
+            if label.startswith("Xóa"):
                 button.setProperty("danger", True)
             button.clicked.connect(handler)
             controls.addWidget(button)
         controls.addStretch()
-        layout.addWidget(toolbar)
+        layout.addWidget(self.toolbar_scroller(toolbar))
         loading = QProgressBar()
         loading.setRange(0, 0)
         loading.setTextVisible(False)
@@ -750,8 +620,11 @@ class MainWindow(QMainWindow):
             ("open_alerts", "Cảnh báo đang mở"),
             ("connected_clients", "Client trực tuyến"),
         ]
+        tones = ("blue", "violet", "mint", "coral", "amber")
         for index, (key, title) in enumerate(definitions):
             card = QFrame(objectName="adminCard")
+            card.setProperty("tone", tones[index % len(tones)])
+            self.add_shadow(card, blur=20, y_offset=5, alpha=26)
             box = QVBoxLayout(card)
             box.addWidget(QLabel(title))
             value = QLabel("—", objectName="adminMetric")
@@ -761,6 +634,8 @@ class MainWindow(QMainWindow):
         layout.addLayout(grid)
 
         quick_card = QFrame(objectName="card")
+        quick_card.setProperty("tone", "violet")
+        self.add_shadow(quick_card, blur=22, y_offset=5, alpha=25)
         quick = QVBoxLayout(quick_card)
         quick.addWidget(QLabel("Tác vụ quản trị nhanh", objectName="emptyTitle"))
         quick.addWidget(
@@ -769,21 +644,24 @@ class MainWindow(QMainWindow):
                 objectName="subtitle",
             )
         )
-        buttons = QHBoxLayout()
-        for label, target in (
+        buttons = QGridLayout()
+        buttons.setHorizontalSpacing(10)
+        buttons.setVerticalSpacing(10)
+        for index, (label, target) in enumerate((
             ("Thêm nhân viên", "Quản lý nhân viên"),
             ("Phân ca", "Phân ca"),
             ("Duyệt nghỉ phép", "Duyệt nghỉ phép"),
-            ("Duyệt thiết bị", "Thiết bị"),
             ("Xử lý cảnh báo", "Cảnh báo"),
+            ("Xem bảng lương", "Lương & chuyên cần"),
             ("Xem báo cáo", "Báo cáo"),
-        ):
+        )):
             button = QPushButton(label)
             button.clicked.connect(lambda _=False, page_name=target: self.go_to_page(page_name))
-            buttons.addWidget(button)
+            buttons.addWidget(button, index // 2, index % 2)
         quick.addLayout(buttons)
         layout.addWidget(quick_card)
         layout.addStretch()
+
 
     def add_page_filters(self, name, table, controls):
         filters = {}
@@ -792,7 +670,7 @@ class MainWindow(QMainWindow):
             search = QLineEdit()
             search.setPlaceholderText("Tìm mã, tên hoặc email...")
             search.setClearButtonEnabled(True)
-            search.returnPressed.connect(lambda t=table, e=endpoint: self.load_table(t, e))
+            search.returnPressed.connect(lambda t=table, e=endpoint: self.apply_table_filters(t, e))
             controls.addWidget(search)
             filters["search"] = search
             active = QComboBox()
@@ -847,18 +725,30 @@ class MainWindow(QMainWindow):
             status.addItem("Đã từ chối", "REJECTED")
             controls.addWidget(status)
             filters["status"] = status
+        if name == "Phê duyệt thiết bị":
+            approval = QComboBox()
+            approval.addItem("Đang chờ phê duyệt", False)
+            approval.addItem("Tất cả thiết bị", None)
+            approval.addItem("Đã phê duyệt", True)
+            controls.addWidget(approval)
+            filters["approved"] = approval
         if filters:
             apply_filter = QPushButton("Áp dụng bộ lọc")
             apply_filter.setProperty("secondary", True)
-            apply_filter.clicked.connect(lambda _=False, t=table, e=endpoint: self.load_table(t, e))
+            apply_filter.clicked.connect(
+                lambda _=False, t=table, e=endpoint: self.apply_table_filters(t, e)
+            )
             controls.addWidget(apply_filter)
         self.table_filters[table] = filters
 
     def safe_get(self, path, **kwargs):
         try:
             data = self.api.request("GET", path, **kwargs)
+            if isinstance(data, dict) and isinstance(data.get("items"), list):
+                return data["items"]
             return data if isinstance(data, list) else []
-        except ApiError:
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không tải được dữ liệu liên quan", str(exc))
             return []
 
     def change_table_page(self, table, endpoint, direction):
@@ -869,6 +759,29 @@ class MainWindow(QMainWindow):
         if 1 <= target <= state["pages"]:
             state["page"] = target
             self.load_table(table, endpoint)
+
+    def apply_table_filters(self, table, endpoint):
+        state = self.table_pagination.get(table)
+        if state:
+            state["page"] = 1
+        self.load_table(table, endpoint)
+
+    def refresh_table(self, table, endpoint):
+        for key, widget in self.table_filters.get(table, {}).items():
+            if isinstance(widget, QLineEdit):
+                widget.clear()
+            elif isinstance(widget, QComboBox):
+                widget.setCurrentIndex(0)
+            elif isinstance(widget, QDateEdit):
+                widget.setDate(
+                    QDate.currentDate().addMonths(-1) if key == "start" else QDate.currentDate()
+                )
+        state = self.table_pagination.get(table)
+        if state:
+            state["page"] = 1
+        table.clearSelection()
+        self.load_table(table, endpoint)
+        self.show_toast("Đã đặt lại bộ lọc và tải dữ liệu mới nhất.")
 
     @staticmethod
     def empty_message(name):
@@ -891,12 +804,26 @@ class MainWindow(QMainWindow):
         page = self.stack.currentWidget()
         effect = QGraphicsOpacityEffect(page)
         page.setGraphicsEffect(effect)
-        self.page_animation = QPropertyAnimation(effect, b"opacity", self)
-        self.page_animation.setDuration(180)
-        self.page_animation.setStartValue(0.35)
-        self.page_animation.setEndValue(1.0)
-        self.page_animation.setEasingCurve(QEasingCurve.OutCubic)
-        self.page_animation.finished.connect(lambda: page.setGraphicsEffect(None))
+        end_position = page.pos()
+        fade = QPropertyAnimation(effect, b"opacity", self)
+        fade.setDuration(240)
+        fade.setStartValue(0.18)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
+        slide = QPropertyAnimation(page, b"pos", self)
+        slide.setDuration(260)
+        slide.setStartValue(end_position + QPoint(0, 14))
+        slide.setEndValue(end_position)
+        slide.setEasingCurve(QEasingCurve.OutCubic)
+        self.page_animation = QParallelAnimationGroup(self)
+        self.page_animation.addAnimation(fade)
+        self.page_animation.addAnimation(slide)
+        self.page_animation.finished.connect(
+            lambda current=page, position=end_position: (
+                current.move(position),
+                current.setGraphicsEffect(None),
+            )
+        )
         self.page_animation.start()
 
     def go_to_page(self, name):
@@ -917,13 +844,14 @@ class MainWindow(QMainWindow):
             "Ca làm": "/api/v1/shifts",
             "Phân ca": "/api/v1/shift-assignments",
             "Quản lý chấm công": "/api/v1/attendance",
+            "Duyệt làm thêm giờ": "/api/v1/attendance?overtime_status=PENDING",
             "Duyệt điều chỉnh": "/api/v1/attendance/adjustments?status=PENDING",
             "Duyệt nghỉ phép": "/api/v1/leaves?status=PENDING",
             "Loại nghỉ phép": "/api/v1/leave-types",
             "Quỹ phép": "/api/v1/leave-balances",
             "Cảnh báo": "/api/v1/security-alerts?status=OPEN",
             "Xác minh ngẫu nhiên": "/api/v1/random-checks",
-            "Thiết bị": "/api/v1/devices",
+            "Phê duyệt thiết bị": "/api/v1/devices",
             "Client kết nối": "/api/v1/clients",
             "Tài khoản": "/api/v1/users",
             "Báo cáo": "/api/v1/reports/attendance",
@@ -946,6 +874,10 @@ class MainWindow(QMainWindow):
                 ("Duyệt", lambda: self.review(table, "adjustment", True)),
                 ("Từ chối", lambda: self.review(table, "adjustment", False)),
             ],
+            "Duyệt làm thêm giờ": [
+                ("Duyệt OT", lambda: self.review(table, "overtime", True)),
+                ("Từ chối OT", lambda: self.review(table, "overtime", False)),
+            ],
             "Duyệt nghỉ phép": [
                 ("Duyệt", lambda: self.review(table, "leave", True)),
                 ("Từ chối", lambda: self.review(table, "leave", False)),
@@ -954,9 +886,10 @@ class MainWindow(QMainWindow):
                 ("Xác nhận", lambda: self.review(table, "alert", True)),
                 ("Bỏ cảnh báo", lambda: self.review(table, "alert", False)),
             ],
-            "Thiết bị": [
+            "Phê duyệt thiết bị": [
                 ("Phê duyệt", lambda: self.approve_device(table, True)),
                 ("Thu hồi", lambda: self.approve_device(table, False)),
+                ("Xóa thiết bị cũ", lambda: self.remove_device(table)),
             ],
             "Báo cáo": [
                 ("Xuất Excel", lambda: self.export_report("xlsx", table)),
@@ -1023,11 +956,6 @@ class MainWindow(QMainWindow):
             ],
             "Xác minh ngẫu nhiên": [
                 ("Xóa", lambda: self.delete_record(table, "random-checks")),
-            ],
-            "Thiết bị": [
-                ("Phê duyệt", lambda: self.approve_device(table, True)),
-                ("Thu hồi", lambda: self.approve_device(table, False)),
-                ("Xóa", lambda: self.delete_record(table, "devices")),
             ],
             "Tài khoản": [
                 ("Đổi vai trò", lambda: self.change_role(table)),
@@ -1124,14 +1052,33 @@ class MainWindow(QMainWindow):
         for row_idx, row in enumerate(rows):
             for col_idx, key in enumerate(columns):
                 value = row.get(key, "")
-                item = QTableWidgetItem(self.format_cell(value))
+                if key in (
+                    "check_in_latitude",
+                    "check_in_longitude",
+                    "check_out_latitude",
+                    "check_out_longitude",
+                ) and value not in (None, ""):
+                    text = f"{float(value):.6f}"
+                else:
+                    text = self.format_cell(value)
+                item = QTableWidgetItem(text)
+                item.setData(Qt.UserRole, row)
+                item.setToolTip(text)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if key in ("status", "result", "role"):
                     self.color_status_item(item, value)
+                elif key in ("check_in_latitude", "check_out_latitude") and value is not None:
+                    item.setForeground(QBrush(QColor("#075985")))
+                    item.setBackground(QBrush(QColor("#E0F2FE")))
+                elif key in ("check_in_longitude", "check_out_longitude") and value is not None:
+                    item.setForeground(QBrush(QColor("#166534")))
+                    item.setBackground(QBrush(QColor("#DCFCE7")))
                 table.setItem(row_idx, col_idx, item)
         table.resizeColumnsToContents()
         if columns:
-            table.horizontalHeader().setStretchLastSection(True)
             table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+            self.fit_table_columns(table, columns)
         table.setSortingEnabled(bool(rows))
         if table in self.empty_states:
             self.empty_states[table].setVisible(not rows)
@@ -1178,8 +1125,15 @@ class MainWindow(QMainWindow):
 
     def selected(self, table):
         index, rows = table.currentRow(), self.table_rows.get(table, [])
-        if index < 0 or index >= len(rows):
+        if index < 0:
             QMessageBox.information(self, "Chọn dữ liệu", "Hãy chọn một dòng trước.")
+            return None
+        anchor = table.item(index, 0)
+        attached_row = anchor.data(Qt.UserRole) if anchor else None
+        if isinstance(attached_row, dict):
+            return attached_row
+        if index >= len(rows):
+            QMessageBox.information(self, "Chọn dữ liệu", "Dòng được chọn không còn hợp lệ.")
             return None
         return rows[index]
 
@@ -1195,65 +1149,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Không thực hiện được", str(exc))
             return None
 
-    def create_leave(self, table):
-        try:
-            types = self.api.request("GET", "/api/v1/leave-types")
-        except ApiError as exc:
-            QMessageBox.warning(self, "Không tải được loại nghỉ", str(exc))
-            return
-        if not types:
-            QMessageBox.information(
-                self,
-                "Chưa có loại nghỉ phép",
-                "Admin cần tạo ít nhất một loại nghỉ phép trước khi nhân viên tạo đơn.",
-            )
-            return
-        fields = [
-            Field(
-                "leave_type_id",
-                "Loại nghỉ",
-                "choice",
-                options=[(x["name"], x["id"]) for x in types],
-            ),
-            Field("start_date", "Từ ngày", "date"),
-            Field("end_date", "Đến ngày", "date"),
-            Field("reason", "Lý do", "multiline"),
-        ]
-        if self.submit_dialog("Tạo đơn nghỉ phép", fields, "POST", "/api/v1/leaves"):
-            self.load_table(table, "/api/v1/leaves")
-
-    def cancel_leave(self, table):
-        row = self.selected(table)
-        if not row:
-            return
-        if row.get("status") not in ("PENDING", "APPROVED"):
-            QMessageBox.information(
-                self, "Không thể hủy", "Chỉ có thể hủy đơn đang chờ hoặc đã duyệt."
-            )
-            return
-        if (
-            QMessageBox.question(
-                self,
-                "Hủy đơn nghỉ phép",
-                f"Bạn chắc chắn muốn hủy đơn #{row['id']}?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            != QMessageBox.Yes
-        ):
-            return
-        try:
-            self.api.request("POST", f"/api/v1/leaves/{row['id']}/cancel")
-            self.show_toast("Đã hủy đơn nghỉ phép.")
-            self.load_table(table, "/api/v1/leaves")
-        except ApiError as exc:
-            QMessageBox.warning(self, "Không hủy được đơn", str(exc))
-
     def create_employee(self, table):
         try:
             departments, positions = (
-                self.api.request("GET", "/api/v1/departments"),
-                self.api.request("GET", "/api/v1/positions"),
+                self.api.request("GET", "/api/v1/departments", params={"active": True}),
+                self.api.request("GET", "/api/v1/positions", params={"active": True}),
             )
         except ApiError as exc:
             QMessageBox.warning(self, "Không tải được danh mục", str(exc))
@@ -1299,8 +1199,8 @@ class MainWindow(QMainWindow):
         row = self.selected(table)
         if not row:
             return
-        departments = self.api.request("GET", "/api/v1/departments")
-        positions = self.api.request("GET", "/api/v1/positions")
+        departments = self.api.request("GET", "/api/v1/departments", params={"active": True})
+        positions = self.api.request("GET", "/api/v1/positions", params={"active": True})
         fields = [
             Field("full_name", "Họ tên", value=row.get("full_name")),
             Field("email", "Email", value=row.get("email")),
@@ -1515,7 +1415,7 @@ class MainWindow(QMainWindow):
         try:
             employees, shifts = (
                 self.api.request("GET", "/api/v1/employees", params={"active": True}),
-                self.api.request("GET", "/api/v1/shifts"),
+                self.api.request("GET", "/api/v1/shifts", params={"active": True}),
             )
         except ApiError as exc:
             QMessageBox.warning(self, "Không tải được danh mục", str(exc))
@@ -1584,11 +1484,13 @@ class MainWindow(QMainWindow):
             "leave": f"/api/v1/leaves/{row['id']}/review",
             "adjustment": f"/api/v1/attendance/adjustments/{row['id']}/review",
             "alert": f"/api/v1/security-alerts/{row['id']}/resolve",
+            "overtime": f"/api/v1/attendance/{row['id']}/overtime/review",
         }
         reloads = {
             "leave": "/api/v1/leaves?status=PENDING",
             "adjustment": "/api/v1/attendance/adjustments",
             "alert": "/api/v1/security-alerts?status=OPEN",
+            "overtime": "/api/v1/attendance?overtime_status=PENDING",
         }
         try:
             self.api.request(
@@ -1610,6 +1512,30 @@ class MainWindow(QMainWindow):
                 self.load_table(table, "/api/v1/devices")
             except ApiError as exc:
                 QMessageBox.warning(self, "Không cập nhật được thiết bị", str(exc))
+
+    def remove_device(self, table):
+        row = self.selected(table)
+        if not row:
+            return
+        message = (
+            f"Xóa thiết bị {row.get('device_name') or '#' + str(row['id'])} của "
+            f"{row.get('full_name') or 'nhân viên này'}?\n\n"
+            "Thiết bị sẽ bị thu hồi quyền chấm công. Nếu đã có lịch sử chấm công, "
+            "hệ thống sẽ lưu trữ thiết bị thay vì xóa lịch sử."
+        )
+        if QMessageBox.question(self, "Xóa thiết bị cũ", message) != QMessageBox.Yes:
+            return
+        try:
+            result = self.api.request("DELETE", f"/api/v1/devices/{row['id']}")
+            notice = (
+                "Đã lưu trữ và thu hồi thiết bị cũ."
+                if result.get("archived")
+                else "Đã xóa thiết bị cũ."
+            )
+            self.show_toast(notice)
+            self.load_table(table, "/api/v1/devices")
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không xóa được thiết bị", str(exc))
 
     def toggle_employee(self, table):
         row = self.selected(table)
@@ -1705,7 +1631,7 @@ class MainWindow(QMainWindow):
             is not None
         ):
             QMessageBox.information(self, "Đã đổi mật khẩu", "Hãy đăng nhập lại.")
-            self.close()
+            self.return_to_login()
 
     def update_setting(self, table):
         row = self.selected(table)
@@ -1785,7 +1711,7 @@ class MainWindow(QMainWindow):
                 "Khôi phục thành công",
                 "Dữ liệu đã được khôi phục. Hãy đăng nhập lại để tải trạng thái mới.",
             )
-            self.close()
+            self.return_to_login()
         except ApiError as exc:
             QMessageBox.warning(self, "Khôi phục thất bại", str(exc))
 
@@ -1795,6 +1721,8 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        if not path.lower().endswith(f".{extension}"):
+            path += f".{extension}"
         params = {}
         for key, widget in self.table_filters.get(table, {}).items():
             if isinstance(widget, QDateEdit):
@@ -1808,11 +1736,49 @@ class MainWindow(QMainWindow):
         params.setdefault("start", QDate.currentDate().addMonths(-1).toString("yyyy-MM-dd"))
         params.setdefault("end", QDate.currentDate().toString("yyyy-MM-dd"))
         try:
-            with open(path, "wb") as stream:
-                stream.write(self.api.download(f"/api/v1/reports/attendance.{extension}", params))
+            content = self.api.download(f"/api/v1/reports/attendance.{extension}", params)
+            write_bytes_atomic(path, content)
             self.show_toast(f"Đã xuất báo cáo: {path}")
         except (OSError, ApiError) as exc:
             QMessageBox.warning(self, "Không xuất được báo cáo", str(exc))
+
+    def export_table_excel(self, table):
+        if table.rowCount() == 0 or table.columnCount() == 0:
+            QMessageBox.information(
+                self, "Chưa có dữ liệu", "Không có dữ liệu đang hiển thị để xuất file."
+            )
+            return
+        page_name = str(table.property("page_name") or "bao_cao")
+        safe_name = "".join(character if character.isalnum() else "_" for character in page_name)
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Xuất dữ liệu đang hiển thị",
+            f"{safe_name}.xlsx",
+            "Excel Workbook (*.xlsx)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path += ".xlsx"
+        try:
+            headers = [
+                table.horizontalHeaderItem(column).text()
+                if table.horizontalHeaderItem(column)
+                else f"Cột {column + 1}"
+                for column in range(table.columnCount())
+            ]
+            rows = [
+                [
+                    table.item(row, column).text() if table.item(row, column) else ""
+                    for column in range(table.columnCount())
+                ]
+                for row in range(table.rowCount())
+            ]
+            content = styled_workbook_bytes(page_name, headers, rows)
+            write_bytes_atomic(path, content)
+            self.show_toast(f"Đã xuất dữ liệu: {path}")
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Không xuất được file", str(exc))
 
     def refresh_dashboard(self):
         if hasattr(self, "metrics") or hasattr(self, "admin_metrics"):
@@ -1826,105 +1792,11 @@ class MainWindow(QMainWindow):
                 if hasattr(self, "chart_values"):
                     for index, key in enumerate(getattr(self, "metrics", {})):
                         self.chart_values.replace(index, float(data.get(key, 0)))
-            except ApiError:
+            except ApiError as exc:
                 self.connection_state(False)
-
-    @staticmethod
-    def vietnamese_weekday(weekday):
-        return (
-            "Thứ Hai",
-            "Thứ Ba",
-            "Thứ Tư",
-            "Thứ Năm",
-            "Thứ Sáu",
-            "Thứ Bảy",
-            "Chủ Nhật",
-        )[weekday]
-
-    @staticmethod
-    def display_time(value):
-        if not value:
-            return "Chưa ghi nhận"
-        try:
-            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=UTC)
-            return parsed.astimezone().strftime("%H:%M")
-        except (TypeError, ValueError):
-            return str(value)
-
-    def refresh_attendance_panel(self):
-        if not hasattr(self, "attendance_summary"):
-            return
-        today = datetime.now().strftime("%Y-%m-%d")
-        params = {"mine": True, "start": today, "end": today, "page": 1, "page_size": 5}
-        try:
-            attendance_data = self.api.request("GET", "/api/v1/attendance", params=params)
-            schedule_data = self.api.request(
-                "GET", "/api/v1/shift-assignments", params=params
-            )
-        except ApiError as exc:
-            self.attendance_notice.setText(f"Chưa thể tải trạng thái chấm công: {exc}")
-            return
-
-        attendance_rows = (
-            attendance_data.get("items", []) if isinstance(attendance_data, dict) else []
-        )
-        schedule_rows = schedule_data.get("items", []) if isinstance(schedule_data, dict) else []
-        record = attendance_rows[0] if attendance_rows else None
-        assignment = schedule_rows[0] if schedule_rows else None
-        self.attendance_summary["shift"].setText(
-            assignment.get("shift_name", "Chưa có lịch làm")
-            if assignment
-            else "Chưa có lịch làm"
-        )
-        self.attendance_summary["check_in"].setText(
-            self.display_time(record.get("check_in_at")) if record else "Chưa ghi nhận"
-        )
-        self.attendance_summary["check_out"].setText(
-            self.display_time(record.get("check_out_at")) if record else "Chưa ghi nhận"
-        )
-        worked_minutes = int(record.get("worked_minutes") or 0) if record else 0
-        self.attendance_summary["worked"].setText(
-            f"{worked_minutes // 60} giờ {worked_minutes % 60:02d} phút" if worked_minutes else "—"
-        )
-
-        if not record:
-            status_text, state = "CHƯA CHECK-IN", "idle"
-            self.check_in_button.setEnabled(bool(assignment))
-            self.check_out_button.setEnabled(False)
-            notice = (
-                "Bạn chưa bắt đầu ca làm hôm nay."
-                if assignment
-                else "Hôm nay bạn chưa được phân ca."
-            )
-        elif not record.get("check_out_at"):
-            status_text, state = "ĐANG TRONG CA", "active"
-            self.check_in_button.setEnabled(False)
-            self.check_out_button.setEnabled(True)
-            notice = "Ca làm đang được ghi nhận. Hãy CHECK-OUT khi kết thúc công việc."
-        else:
-            status_text, state = "ĐÃ HOÀN THÀNH", "complete"
-            self.check_in_button.setEnabled(False)
-            self.check_out_button.setEnabled(False)
-            status = STATUS_TEXT.get(record.get("status"), record.get("status", ""))
-            notice = f"Ca làm hôm nay đã hoàn thành — {status}."
-        self.attendance_status.setText(status_text)
-        self.attendance_status.setProperty("state", state)
-        self.attendance_status.style().unpolish(self.attendance_status)
-        self.attendance_status.style().polish(self.attendance_status)
-        self.attendance_notice.setText(notice)
-
-    def do_attendance(self, action):
-        try:
-            data = self.api.attendance(action)
-            self.show_toast(
-                f"Chấm công thành công — {STATUS_TEXT.get(data['status'], data['status'])}"
-            )
-            self.refresh_attendance_panel()
-            self.refresh_dashboard()
-        except ApiError as exc:
-            QMessageBox.warning(self, "Không thể chấm công", str(exc))
+                if not self._dashboard_error_shown:
+                    self._dashboard_error_shown = True
+                    self.show_toast(f"Không cập nhật được tổng quan: {exc}", error=True)
 
     def realtime_message(self, payload):
         if payload.get("type") == "random_check":
@@ -1990,6 +1862,34 @@ class MainWindow(QMainWindow):
     def connection_state(self, connected):
         self.connection.setText("● Đã kết nối" if connected else "● Mất kết nối — đang thử lại")
         self.connection.setStyleSheet("color: #22C55E" if connected else "color: #EF4444")
+        if connected:
+            self._realtime_ever_connected = True
+            self._local_server_shutdown_generation += 1
+            self._dashboard_error_shown = False
+            self._realtime_error_shown = False
+        elif self._realtime_ever_connected and getattr(self.api, "local_server", False):
+            self._local_server_shutdown_generation += 1
+            generation = self._local_server_shutdown_generation
+            QTimer.singleShot(
+                2500,
+                lambda current=generation: self._close_after_local_server_loss(current),
+            )
+
+    def _close_after_local_server_loss(self, generation):
+        if (
+            generation != self._local_server_shutdown_generation
+            or self._session_end_emitted
+        ):
+            return
+        self.connection.setText("● Server nội bộ đã dừng — đang đóng ứng dụng")
+        self.close()
+
+    def realtime_error(self, message):
+        self.connection_state(False)
+        self.connection.setToolTip(message)
+        if not self._realtime_error_shown:
+            self._realtime_error_shown = True
+            self.show_toast(message, error=True)
 
     def toggle_theme(self):
         self.dark = not self.dark
@@ -1997,6 +1897,8 @@ class MainWindow(QMainWindow):
             self.setStyleSheet(ADMIN_DARK if self.dark else ADMIN_LIGHT)
         else:
             self.setStyleSheet(DARK if self.dark else LIGHT)
+        if hasattr(self, "payroll_data"):
+            self.render_payroll_charts(self.payroll_data)
 
     def show_toast(self, message, error=False):
         if hasattr(self, "toast") and self.toast:
@@ -2040,6 +1942,10 @@ class MainWindow(QMainWindow):
                 != QMessageBox.Yes
             ):
                 return
+        self.return_to_login()
+
+    def return_to_login(self):
+        """End the current UI session without terminating the desktop process."""
         self.api.clear_session()
         self._logout_requested = True
         self._finish_session(logged_out=True)

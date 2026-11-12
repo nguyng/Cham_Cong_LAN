@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.ui.icons import decorate_button
+
 
 @dataclass
 class Field:
@@ -46,6 +48,13 @@ class FormDialog(QDialog):
             form.addRow(field.label, widget)
         root.addLayout(form)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok_button = buttons.button(QDialogButtonBox.Ok)
+        cancel_button = buttons.button(QDialogButtonBox.Cancel)
+        ok_button.setText("Lưu thay đổi")
+        cancel_button.setText("Hủy")
+        cancel_button.setProperty("secondary", True)
+        decorate_button(ok_button)
+        decorate_button(cancel_button)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
@@ -76,8 +85,10 @@ class FormDialog(QDialog):
             return widget
         if field.kind == "decimal":
             widget = QDoubleSpinBox()
-            widget.setRange(0, 1000000)
+            widget.setRange(0, 999999999999)
             widget.setDecimals(2)
+            widget.setSingleStep(100000)
+            widget.setGroupSeparatorShown(True)
             widget.setValue(float(field.value or 0))
             return widget
         if field.kind == "multiline":

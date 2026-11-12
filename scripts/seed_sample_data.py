@@ -25,7 +25,7 @@ def arguments():
     parser.add_argument(
         "--database",
         type=Path,
-        default=ROOT / "dist_portable" / "AttendanceServer" / "data" / "attendance.db",
+        default=SERVER_ROOT / "data" / "attendance.db",
         help="Đường dẫn SQLite cần nạp dữ liệu",
     )
     parser.add_argument(
@@ -296,6 +296,8 @@ def seed(database_path: Path):
                 RoleName.ADMIN,
                 0,
                 2,
+                Decimal("30000000"),
+                Decimal("2000000"),
             ),
             (
                 "NV002",
@@ -306,6 +308,8 @@ def seed(database_path: Path):
                 RoleName.MANAGER,
                 1,
                 2,
+                Decimal("25000000"),
+                Decimal("1500000"),
             ),
             (
                 "NV003",
@@ -316,6 +320,8 @@ def seed(database_path: Path):
                 RoleName.EMPLOYEE,
                 1,
                 0,
+                Decimal("15000000"),
+                Decimal("1000000"),
             ),
             (
                 "NV004",
@@ -326,6 +332,8 @@ def seed(database_path: Path):
                 RoleName.EMPLOYEE,
                 3,
                 4,
+                Decimal("18000000"),
+                Decimal("1200000"),
             ),
             (
                 "NV005",
@@ -336,6 +344,8 @@ def seed(database_path: Path):
                 RoleName.EMPLOYEE,
                 4,
                 3,
+                Decimal("17000000"),
+                Decimal("1100000"),
             ),
         ]
         employees = []
@@ -349,6 +359,8 @@ def seed(database_path: Path):
             role_name,
             department_index,
             position_index,
+            base_salary,
+            attendance_bonus,
         ) in enumerate(employee_data):
             employee = upsert(
                 db,
@@ -361,6 +373,9 @@ def seed(database_path: Path):
                     "department_id": departments[department_index].id,
                     "position_id": positions[position_index].id,
                     "hire_date": today - timedelta(days=365 + index * 90),
+                    "base_salary": base_salary,
+                    "attendance_bonus": attendance_bonus,
+                    "overtime_multiplier": Decimal(("2.00", "1.50", "1.50", "1.75", "1.50")[index]),
                     "active": True,
                 },
             )
@@ -472,12 +487,19 @@ def seed(database_path: Path):
         attendance_statuses = [
             AttendanceStatus.ON_TIME,
             AttendanceStatus.LATE,
-            AttendanceStatus.EARLY_LEAVE,
+            AttendanceStatus.ON_TIME,
             AttendanceStatus.LATE_AND_EARLY,
             AttendanceStatus.OPEN,
         ]
         attendances = []
         assignments = []
+        gps_coordinates = [
+            (10.776889, 106.700806),
+            (10.779784, 106.699019),
+            (10.773241, 106.703183),
+            (10.781102, 106.696325),
+            (10.775514, 106.706412),
+        ]
         for index, (employee, shift, device) in enumerate(
             zip(employees, shifts, devices, strict=False)
         ):
@@ -496,8 +518,8 @@ def seed(database_path: Path):
                 end_date = work_date + timedelta(
                     days=1 if shift.end_time <= shift.start_time else 0
                 )
-                check_out = datetime.combine(end_date, shift.end_time, tzinfo=UTC) - timedelta(
-                    minutes=(0, 0, 35, 25, 0)[index]
+                check_out = datetime.combine(end_date, shift.end_time, tzinfo=UTC) + timedelta(
+                    minutes=(60, 45, 30, -25, 0)[index]
                 )
             attendance = upsert(
                 db,
@@ -512,12 +534,40 @@ def seed(database_path: Path):
                     "check_out_at": check_out,
                     "check_in_ip": f"127.0.0.{index + 1}",
                     "check_out_ip": f"127.0.0.{index + 1}" if check_out else None,
+                    "check_in_latitude": gps_coordinates[index][0],
+                    "check_in_longitude": gps_coordinates[index][1],
+                    "check_in_accuracy_meters": float(8 + index * 3),
+                    "check_in_geofence_distance_meters": float(12 + index * 9),
+                    "check_out_latitude": (
+                        gps_coordinates[index][0] + 0.0001 if check_out else None
+                    ),
+                    "check_out_longitude": (
+                        gps_coordinates[index][1] + 0.0001 if check_out else None
+                    ),
+                    "check_out_accuracy_meters": float(10 + index * 3) if check_out else None,
+                    "check_out_geofence_distance_meters": (
+                        float(15 + index * 9) if check_out else None
+                    ),
                     "device_id": device.id,
                     "status": attendance_statuses[index],
                     "late_minutes": (0, 22, 0, 18, 0)[index],
-                    "early_leave_minutes": (0, 0, 35, 25, 0)[index],
-                    "worked_minutes": (480, 458, 445, 437, 0)[index],
+                    "early_leave_minutes": (0, 0, 0, 25, 0)[index],
+                    "worked_minutes": (540, 503, 510, 437, 0)[index],
                     "break_minutes": shift.break_minutes,
+                    "overtime_minutes": (60, 45, 30, 0, 0)[index],
+                    "approved_overtime_minutes": (60, 0, 0, 0, 0)[index],
+                    "overtime_status": (
+                        "APPROVED",
+                        "PENDING",
+                        "REJECTED",
+                        "NONE",
+                        "NONE",
+                    )[index],
+                    "overtime_reviewed_by": users[0].id if index in (0, 2) else None,
+                    "overtime_review_note": (
+                        "Đã đối chiếu phân công làm thêm" if index in (0, 2) else None
+                    ),
+                    "overtime_reviewed_at": now if index in (0, 2) else None,
                     "suspicious": index == 3,
                 },
             )

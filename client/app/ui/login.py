@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.network.api import ApiError
+from app.ui.icons import decorate_button
 
 
 class LoginDialog(QDialog):
@@ -37,18 +38,26 @@ class LoginDialog(QDialog):
         )
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         form = QFormLayout()
         self.username = QLineEdit()
         self.password = QLineEdit()
+        self.username.setPlaceholderText("Nhập tên đăng nhập")
+        self.password.setPlaceholderText("Nhập mật khẩu")
         self.password.setEchoMode(QLineEdit.Password)
         form.addRow("Tên đăng nhập", self.username)
         form.addRow("Mật khẩu", self.password)
         layout.addLayout(form)
         buttons = QHBoxLayout()
         discover = QPushButton("Tìm Server")
+        discover.setProperty("secondary", True)
         login = QPushButton("Đăng nhập")
+        decorate_button(discover)
+        decorate_button(login)
+        discover.setMinimumWidth(150)
+        login.setMinimumWidth(150)
         discover.clicked.connect(self.find_server)
         login.clicked.connect(self.submit)
         self.password.returnPressed.connect(self.submit)
@@ -60,18 +69,41 @@ class LoginDialog(QDialog):
         layout.addWidget(self.server)
 
     def find_server(self):
-        url = self.api.discover()
+        try:
+            url = self.api.discover()
+        except (ApiError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Không thể tìm Server", str(exc))
+            return
         if url:
-            self.api.set_server(url)
+            try:
+                self.api.set_server(url)
+            except ApiError as exc:
+                QMessageBox.warning(self, "Không thể lưu Server", str(exc))
+                return
             self.server.setText(url)
         else:
-            QMessageBox.warning(self, "Khám phá Server", "Không tìm thấy Server trong mạng LAN.")
+            QMessageBox.warning(
+                self,
+                "Không tìm thấy Server",
+                "Không tìm thấy Server trong mạng LAN.\n\n"
+                "Hãy kiểm tra Server đang chạy, máy đang cùng mạng LAN và Firewall cho phép UDP.",
+            )
 
     def submit(self):
+        username = self.username.text().strip()
+        password = self.password.text()
+        if not username or not password:
+            QMessageBox.warning(
+                self,
+                "Thiếu thông tin đăng nhập",
+                "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.",
+            )
+            (self.username if not username else self.password).setFocus()
+            return
         try:
             self.api.login(
-                self.username.text().strip(),
-                self.password.text(),
+                username,
+                password,
                 register_device=not self.admin_only,
             )
         except ApiError as exc:

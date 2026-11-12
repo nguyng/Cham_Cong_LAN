@@ -35,18 +35,19 @@ def paginated(
     total = db.scalar(
         select(func.count()).select_from(query.order_by(None).limit(None).offset(None).subquery())
     )
+    pages = max(1, (total + pagination.page_size - 1) // pagination.page_size)
+    page = min(pagination.page, pages)
     items = (
         db.scalars(
-            query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
+            query.offset((page - 1) * pagination.page_size).limit(pagination.page_size)
         )
         .unique()
         .all()
     )
-    pages = max(1, (total + pagination.page_size - 1) // pagination.page_size)
     return {
         "items": [serializer(item) for item in items],
         "pagination": {
-            "page": pagination.page,
+            "page": page,
             "page_size": pagination.page_size,
             "total": total,
             "pages": pages,
@@ -58,13 +59,15 @@ def paginated_rows(rows: list[dict], pagination: Pagination):
     if pagination.page is None:
         return rows
     total = len(rows)
-    start = (pagination.page - 1) * pagination.page_size
+    pages = max(1, (total + pagination.page_size - 1) // pagination.page_size)
+    page = min(pagination.page, pages)
+    start = (page - 1) * pagination.page_size
     return {
         "items": rows[start : start + pagination.page_size],
         "pagination": {
-            "page": pagination.page,
+            "page": page,
             "page_size": pagination.page_size,
             "total": total,
-            "pages": max(1, (total + pagination.page_size - 1) // pagination.page_size),
+            "pages": pages,
         },
     }

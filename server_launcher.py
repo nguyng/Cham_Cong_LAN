@@ -31,6 +31,15 @@ def configure_console_window():
         pass
 
 
+def require_packaged_runtime_config():
+    if getattr(sys, "frozen", False):
+        config_path = Path(sys.executable).resolve().with_name("server.env")
+        if not config_path.is_file():
+            raise SystemExit(
+                "Thiếu server.env cạnh AttendanceServer.exe. Hãy build lại hoặc khôi phục tệp cấu hình."
+            )
+
+
 def run_migrations(database_url: str):
     database_path = sqlite_database_path(database_url)
     if database_path != Path(":memory:"):
@@ -59,6 +68,7 @@ def command_line():
 def main():
     configure_console_encoding()
     configure_console_window()
+    require_packaged_runtime_config()
     arguments = command_line()
     settings = get_settings()
     run_migrations(settings.database_url)

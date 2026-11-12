@@ -1,5 +1,7 @@
+from datetime import UTC, datetime, timedelta
+
 from app.database.session import SessionLocal
-from app.models.entities import User
+from app.models.entities import LoginSession, User
 from conftest import login
 
 
@@ -103,3 +105,16 @@ def test_role_change_revokes_target_sessions(client, admin_headers, manager_head
 
     assert changed.status_code == 200
     assert client.get("/api/v1/me", headers=manager_headers).status_code == 401
+
+
+def test_read_only_request_persists_session_last_seen(client, employee_headers):
+    old_time = datetime.now(UTC) - timedelta(days=1)
+    with SessionLocal.begin() as db:
+        session = db.query(LoginSession).filter(LoginSession.revoked_at.is_(None)).one()
+        session.last_seen_at = old_time
+        session_id = session.id
+
+    assert client.get("/api/v1/me", headers=employee_headers).status_code == 200
+    with SessionLocal() as db:
+        updated = db.get(LoginSession, session_id).last_seen_at.replace(tzinfo=UTC)
+        assert updated > old_time + timedelta(hours=23)
