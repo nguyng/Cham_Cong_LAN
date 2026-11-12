@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.network.api import ApiError
+from app.ui.icons import decorate_button
 
 
 class LoginDialog(QDialog):
@@ -37,18 +38,26 @@ class LoginDialog(QDialog):
         )
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         form = QFormLayout()
         self.username = QLineEdit()
         self.password = QLineEdit()
+        self.username.setPlaceholderText("Nhập tên đăng nhập")
+        self.password.setPlaceholderText("Nhập mật khẩu")
         self.password.setEchoMode(QLineEdit.Password)
         form.addRow("Tên đăng nhập", self.username)
         form.addRow("Mật khẩu", self.password)
         layout.addLayout(form)
         buttons = QHBoxLayout()
         discover = QPushButton("Tìm Server")
+        discover.setProperty("secondary", True)
         login = QPushButton("Đăng nhập")
+        decorate_button(discover)
+        decorate_button(login)
+        discover.setMinimumWidth(150)
+        login.setMinimumWidth(150)
         discover.clicked.connect(self.find_server)
         login.clicked.connect(self.submit)
         self.password.returnPressed.connect(self.submit)

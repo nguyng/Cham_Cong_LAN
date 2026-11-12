@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from app.services.backup import backup_database, restore_database
 
 
@@ -40,3 +41,20 @@ def test_sqlite_restore_round_trip(monkeypatch):
     restore_database(saved)
     with sqlite3.connect(database) as connection:
         assert connection.execute("select value from sample").fetchone()[0] == "before"
+
+
+def test_backup_does_not_create_an_empty_database_when_source_is_missing(monkeypatch):
+    import app.services.backup as backup_module
+
+    runtime_dir = Path(".test-runtime") / str(uuid4())
+    backup_dir = runtime_dir / "backups"
+    settings = SimpleNamespace(
+        database_url=f"sqlite:///{runtime_dir / 'missing.sqlite3'}",
+        backup_directory=str(backup_dir),
+    )
+    monkeypatch.setattr(backup_module, "get_settings", lambda: settings)
+
+    with pytest.raises(ValueError, match="Không tìm thấy"):
+        backup_module.backup_database()
+    assert not (runtime_dir / "missing.sqlite3").exists()
+    assert not backup_dir.exists()

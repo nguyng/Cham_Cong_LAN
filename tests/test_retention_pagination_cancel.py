@@ -65,6 +65,15 @@ def test_list_endpoint_returns_pagination_metadata(client, admin_headers):
     assert len(data["items"]) == 2
     assert data["pagination"] == {"page": 2, "page_size": 2, "total": 6, "pages": 3}
 
+    beyond_last = client.get(
+        "/api/v1/departments",
+        params={"page": 99, "page_size": 2},
+        headers=admin_headers,
+    )
+    assert beyond_last.status_code == 200
+    assert len(beyond_last.json()["items"]) == 2
+    assert beyond_last.json()["pagination"]["page"] == 3
+
 
 def test_periodic_cleanup_removes_only_expired_records(employee_headers):
     now = datetime.now(UTC)

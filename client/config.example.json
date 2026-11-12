@@ -1,6 +1,7 @@
 {
-  "server_url": "https://192.168.1.100:8000",
-  "verify_tls": true,
+  "server_url": "http://127.0.0.1:8000",
+  "verify_tls": false,
+  "allow_lan_ip_location_fallback": true,
   "discovery_port": 37020,
   "request_timeout_seconds": 10
 }

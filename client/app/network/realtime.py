@@ -9,9 +9,10 @@ class RealtimeThread(QThread):
     connection_changed = Signal(bool)
     error = Signal(str)
 
-    def __init__(self, url_factory, parent=None):
+    def __init__(self, url_factory, parent=None, headers_factory=None):
         super().__init__(parent)
         self.url_factory = url_factory
+        self.headers_factory = headers_factory
         self.running = True
         self._event_loop = None
         self._main_task = None
@@ -41,7 +42,12 @@ class RealtimeThread(QThread):
         while self.running:
             try:
                 async with websockets.connect(
-                    self.url_factory(), open_timeout=10, ping_interval=20
+                    self.url_factory(),
+                    additional_headers=(
+                        self.headers_factory() if self.headers_factory else None
+                    ),
+                    open_timeout=10,
+                    ping_interval=20,
                 ) as socket:
                     self.connection_changed.emit(True)
                     delay = 1

@@ -23,10 +23,19 @@ def test_launcher_migrates_a_new_sqlite_database():
                 "select name from sqlite_master where type = 'table'"
             ).fetchall()
         }
+        attendance_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(attendance_records)")
+        }
+        employee_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(employees)")
+        }
         revision = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert "users" in tables
     assert "attendance_records" in tables
-    assert revision == "20261104_0003"
+    assert "check_in_geofence_distance_meters" in attendance_columns
+    assert "overtime_status" in attendance_columns
+    assert "overtime_multiplier" in employee_columns
+    assert revision == "20261113_0006"
 
 
 def test_launcher_migrates_legacy_device_uniqueness_without_data_loss():
@@ -73,7 +82,7 @@ def test_launcher_migrates_legacy_device_uniqueness_without_data_loss():
         count = connection.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
     assert count == 2
-    assert revision == "20261104_0003"
+    assert revision == "20261113_0006"
 
 
 def test_packaged_bootstrap_creates_admin_without_plaintext_password():

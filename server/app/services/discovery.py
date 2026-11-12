@@ -13,11 +13,16 @@ class DiscoveryServer:
     def start(self):
         if self._thread and self._thread.is_alive():
             return
+        self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True, name="udp-discovery")
         self._thread.start()
 
     def stop(self):
         self._stop.set()
+        thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+        self._thread = None
 
     def _run(self):
         settings = get_settings()

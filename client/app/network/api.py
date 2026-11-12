@@ -1,4 +1,4 @@
-import hashlib
+import ipaddress
 import json
 import socket
 import time
@@ -6,6 +6,9 @@ import uuid
 from pathlib import Path
 
 import httpx
+
+from ..device_identity import machine_fingerprint
+from ..files import write_text_atomic
 
 
 class ApiError(RuntimeError):
@@ -29,6 +32,18 @@ VALIDATION_MESSAGES = {
     "bool_parsing": "phải là đúng hoặc sai",
     "literal_error": "không thuộc danh sách được phép",
 }
+
+
+def _server_url(value: object) -> str:
+    if not isinstance(value, str):
+        raise ApiError("Tệp config.json thiếu địa chỉ server_url.")
+    try:
+        parsed = httpx.URL(value.strip())
+    except (TypeError, httpx.InvalidURL) as exc:
+        raise ApiError("server_url trong config.json không phải địa chỉ hợp lệ.") from exc
+    if parsed.scheme not in ("http", "https") or not parsed.host:
+        raise ApiError("server_url trong config.json phải là địa chỉ HTTP/HTTPS có tên máy hoặc IP.")
+    return str(parsed).rstrip("/")
 
 
 def _validation_message(errors: list) -> str:
@@ -91,12 +106,12 @@ class ApiClient:
         self.role: str | None = None
         self.employee_id: int | None = None
         self.device_registration_pending = False
+        self._device_fingerprint = machine_fingerprint(config_path)
         self._client = self._make_client()
 
     @property
     def device_fingerprint(self) -> str:
-        identity = f"{socket.gethostname()}:{uuid.getnode()}"
-        return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        return self._device_fingerprint
 
     def _load_config(self) -> dict:
         if not self.config_path.exists():
@@ -110,6 +125,7 @@ class ApiClient:
                 config = {
                     "server_url": "http://127.0.0.1:8000",
                     "verify_tls": True,
+                    "allow_lan_ip_location_fallback": True,
                     "discovery_port": 37020,
                     "request_timeout_seconds": 10,
                 }
@@ -120,10 +136,9 @@ class ApiClient:
                 raise ApiError(f"Không đọc được tệp cấu hình: {exc}") from exc
             except ValueError as exc:
                 raise ApiError("Tệp config.json không đúng định dạng JSON.") from exc
-        if not isinstance(config, dict) or not isinstance(config.get("server_url"), str):
+        if not isinstance(config, dict):
             raise ApiError("Tệp config.json thiếu địa chỉ server_url.")
-        if not config["server_url"].startswith(("http://", "https://")):
-            raise ApiError("server_url trong config.json phải bắt đầu bằng http:// hoặc https://.")
+        config["server_url"] = _server_url(config.get("server_url"))
         try:
             if int(config.get("discovery_port", 37020)) not in range(1, 65536):
                 raise ValueError
@@ -131,6 +146,10 @@ class ApiClient:
                 raise ValueError
         except (TypeError, ValueError) as exc:
             raise ApiError("Cổng khám phá hoặc thời gian chờ trong config.json không hợp lệ.") from exc
+        if not isinstance(config.get("allow_lan_ip_location_fallback", True), bool):
+            raise ApiError("allow_lan_ip_location_fallback trong config.json phải là true hoặc false.")
+        if not isinstance(config.get("verify_tls", True), bool):
+            raise ApiError("verify_tls trong config.json phải là true hoặc false.")
         return config
 
     def _make_client(self) -> httpx.Client:
@@ -144,10 +163,37 @@ class ApiClient:
     def websocket_url(self) -> str:
         scheme = "wss" if self.config["server_url"].startswith("https") else "ws"
         base = self.config["server_url"].split("://", 1)[1].rstrip("/")
-        return f"{scheme}://{base}/api/v1/ws?token={self.token}"
+        return f"{scheme}://{base}/api/v1/ws"
+
+    @property
+    def websocket_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"} if self.token else {}
+
+    @property
+    def local_server(self) -> bool:
+        host = httpx.URL(self.config["server_url"]).host
+        if not host:
+            return False
+        local_names = {"localhost", socket.gethostname().lower(), socket.getfqdn().lower()}
+        if host.lower() in local_names:
+            return True
+        try:
+            target = ipaddress.ip_address(host.split("%", 1)[0])
+        except ValueError:
+            return False
+        if target.is_loopback:
+            return True
+        try:
+            local_addresses = {
+                ipaddress.ip_address(item[4][0].split("%", 1)[0])
+                for item in socket.getaddrinfo(socket.gethostname(), None)
+            }
+        except (OSError, ValueError):
+            return False
+        return target in local_addresses
 
     def request(self, method: str, path: str, **kwargs):
-        headers = kwargs.pop("headers", {})
+        headers = dict(kwargs.pop("headers", {}))
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         try:
@@ -201,14 +247,26 @@ class ApiClient:
             raise
         return data
 
-    def attendance(self, action: str):
+    def attendance(
+        self,
+        action: str,
+        location: dict[str, float] | None = None,
+        *,
+        use_lan_ip_fallback: bool = False,
+    ):
+        payload = {
+            "device_fingerprint": self.device_fingerprint,
+            "idempotency_key": str(uuid.uuid4()),
+        }
+        if location:
+            payload.update(location)
+            payload["location_source"] = "GPS"
+        elif use_lan_ip_fallback:
+            payload["location_source"] = "LAN_IP_FALLBACK"
         return self.request(
             "POST",
             f"/api/v1/attendance/{action}",
-            json={
-                "device_fingerprint": self.device_fingerprint,
-                "idempotency_key": str(uuid.uuid4()),
-            },
+            json=payload,
         )
 
     def download(self, path: str, params: dict | None = None) -> bytes:
@@ -240,12 +298,12 @@ class ApiClient:
         return None
 
     def set_server(self, url: str):
-        if not url.startswith(("http://", "https://")):
-            raise ApiError("Địa chỉ Server phải bắt đầu bằng http:// hoặc https://.")
-        updated_config = {**self.config, "server_url": url.rstrip("/")}
+        validated_url = _server_url(url)
+        updated_config = {**self.config, "server_url": validated_url}
         try:
-            self.config_path.write_text(
-                json.dumps(updated_config, ensure_ascii=False, indent=2), encoding="utf-8"
+            write_text_atomic(
+                self.config_path,
+                json.dumps(updated_config, ensure_ascii=False, indent=2),
             )
         except OSError as exc:
             raise ApiError(f"Không thể lưu địa chỉ Server vào config.json: {exc}") from exc

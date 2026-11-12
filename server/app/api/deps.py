@@ -1,5 +1,5 @@
 import ipaddress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
@@ -59,7 +59,12 @@ def current_user(
     user = db.get(User, user_id)
     if not user or not user.active:
         raise HTTPException(401, "Tài khoản không hoạt động")
-    session.last_seen_at = now
+    last_seen = session.last_seen_at.replace(tzinfo=UTC) if session.last_seen_at else None
+    if last_seen is None or last_seen < now - timedelta(minutes=1):
+        session.last_seen_at = now
+        # Authentication runs before the endpoint, so committing here safely persists
+        # activity even for read-only requests whose sessions would otherwise roll back.
+        db.commit()
     return user
 
 

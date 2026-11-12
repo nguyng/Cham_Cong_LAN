@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from app.database.session import SessionLocal
 from app.models.entities import (
@@ -121,6 +122,18 @@ def test_removed_device_with_attendance_is_archived_and_can_register_again(
     devices = client.get("/api/v1/devices", headers=manager_headers).json()
     device_id = next(item["id"] for item in devices if item["device_name"] == "Máy kiểm thử NV001")
 
+    still_in_use = client.delete(f"/api/v1/devices/{device_id}", headers=manager_headers)
+    assert still_in_use.status_code == 409
+    checked_out = client.post(
+        "/api/v1/attendance/check-out",
+        json={
+            "device_fingerprint": approved_employee_device,
+            "idempotency_key": "archive-old-device-check-out",
+        },
+        headers=employee_headers,
+    )
+    assert checked_out.status_code == 200
+
     removed = client.delete(f"/api/v1/devices/{device_id}", headers=manager_headers)
     assert removed.status_code == 200
     assert removed.json()["archived"] is True
@@ -162,7 +175,9 @@ def test_adjustment_request_list_and_review(
     )
     assert check_in.status_code == 201
     attendance_id = check_in.json()["id"]
-    proposed = datetime.combine(date.today(), time.min, tzinfo=UTC)
+    proposed = datetime.combine(
+        date.today(), time.min, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")
+    ).astimezone(UTC)
     requested = client.post(
         "/api/v1/attendance/adjustments",
         json={
@@ -243,7 +258,7 @@ def test_websocket_receives_attendance_broadcast(client, approved_employee_devic
         json={"username": "employee", "password": "EmployeePass123!"},
     ).json()
     headers = {"Authorization": f"Bearer {login['access_token']}"}
-    with client.websocket_connect(f"/api/v1/ws?token={login['access_token']}") as socket:
+    with client.websocket_connect("/api/v1/ws", headers=headers) as socket:
         assert socket.receive_json()["type"] == "connected"
         response = client.post(
             "/api/v1/attendance/check-in",
@@ -256,7 +271,7 @@ def test_websocket_receives_attendance_broadcast(client, approved_employee_devic
         assert response.status_code == 201
         message = socket.receive_json()
         assert message["type"] == "attendance_changed"
-        assert message["data"]["id"] == response.json()["id"]
+        assert set(message) == {"type"}
 
 
 def test_mark_own_notification_read(client, employee_headers):

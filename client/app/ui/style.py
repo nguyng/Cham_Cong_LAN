@@ -4,7 +4,8 @@ BASE = """
 QWidget {
     background: #F7F8FC;
     color: #172033;
-    font: 10pt 'Segoe UI';
+    font-family: 'Segoe UI';
+    font-size: 10pt;
 }
 QWidget#appShell, QDialog#employeeLogin, QDialog#adminLogin {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -62,6 +63,17 @@ QFrame#sidebar QLabel, QFrame#adminSidebar QLabel {
     color: #E5E7EB;
     background: transparent;
 }
+QLabel#navSection {
+    color: #94A3B8;
+    font-size: 8pt;
+    font-weight: 700;
+    padding: 10px 8px 3px 8px;
+    border-bottom: 1px solid #334155;
+}
+QFrame#adminSidebar QLabel#navSection {
+    color: #99F6E4;
+    border-bottom: 1px solid #2D5B59;
+}
 QFrame#pageHeader {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -72,6 +84,81 @@ QFrame#toolbar {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
     border-radius: 15px;
+}
+QScrollArea#toolbarScroll,
+QScrollArea#toolbarScroll QWidget#qt_scrollarea_viewport {
+    background: transparent;
+    border: 0;
+}
+QScrollArea#pageScroll,
+QScrollArea#pageScroll QWidget#qt_scrollarea_viewport {
+    background: transparent;
+    border: 0;
+}
+QScrollArea#toolbarScroll QScrollBar:horizontal {
+    background: #EEF2F7;
+    height: 8px;
+    margin: 1px 8px;
+    border-radius: 4px;
+}
+QScrollArea#toolbarScroll QScrollBar::handle:horizontal {
+    background: #94A3B8;
+    border-radius: 4px;
+    min-width: 44px;
+}
+QScrollArea#toolbarScroll QScrollBar::handle:horizontal:hover { background: #4F46E5; }
+QScrollArea#toolbarScroll QScrollBar::add-line:horizontal,
+QScrollArea#toolbarScroll QScrollBar::sub-line:horizontal { width: 0; }
+QFrame#payrollToolbar {
+    background: #FFFFFF;
+    border: 1px solid #BAE6FD;
+    border-left: 4px solid #0EA5E9;
+    border-radius: 16px;
+}
+QFrame#payrollMetricCard {
+    border: 1px solid rgba(255, 255, 255, 70);
+    border-radius: 18px;
+}
+QFrame#payrollMetricCard[tone="teal"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #0F766E, stop:1 #14B8A6);
+}
+QFrame#payrollMetricCard[tone="blue"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #0369A1, stop:1 #0EA5E9);
+}
+QFrame#payrollMetricCard[tone="orange"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #C2410C, stop:1 #F97316);
+}
+QFrame#payrollMetricCard[tone="violet"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #6D28D9, stop:1 #8B5CF6);
+}
+QLabel#payrollMetricLabel { color: #E0F2FE; font-size: 9pt; font-weight: 650; }
+QLabel#payrollMetricValue { color: #FFFFFF; font-size: 20pt; font-weight: 800; }
+QFrame#payrollChartCard {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 18px;
+}
+QLabel#chartTitle { color: #172033; font-size: 12pt; font-weight: 750; }
+QChartView { background: transparent; border: 0; }
+QLabel#payrollPolicy {
+    color: #155E75;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #ECFEFF, stop:1 #FFF7ED);
+    border: 1px solid #A5F3FC;
+    border-radius: 13px;
+    padding: 9px 13px;
+}
+QPushButton[payrollAction="true"] {
+    background: #F97316;
+    border-color: #F97316;
+}
+QPushButton[payrollAction="true"]:hover {
+    background: #C2410C;
+    border-color: #C2410C;
 }
 QFrame#card, QFrame#adminCard, QFrame#emptyCard {
     background: #FFFFFF;
@@ -136,6 +223,26 @@ QFrame#attendanceActionCard, QFrame#attendanceSummaryCard {
     border: 1px solid #E5EAF2;
     border-radius: 18px;
 }
+QFrame#attendanceGpsPanel {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #ECFEFF, stop:1 #EEF2FF);
+    border: 1px solid #A5F3FC;
+    border-radius: 14px;
+}
+QLabel#gpsIcon {
+    color: #FFFFFF;
+    background: #0891B2;
+    border-radius: 18px;
+    min-width: 36px;
+    min-height: 36px;
+    max-width: 36px;
+    max-height: 36px;
+    qproperty-alignment: AlignCenter;
+    font-size: 16pt;
+    font-weight: 800;
+}
+QLabel#gpsTitle { color: #0E7490; font-size: 8pt; font-weight: 800; letter-spacing: 1px; }
+QLabel#gpsValue { color: #164E63; font-size: 10pt; font-weight: 650; }
 QLabel#sectionTitle { color: #172033; font-size: 14pt; font-weight: 750; }
 QPushButton[attendanceAction="checkin"] {
     background: #15803D;
@@ -213,8 +320,11 @@ QPushButton {
     color: #FFFFFF;
     border: 1px solid #4F46E5;
     border-radius: 13px;
-    padding: 10px 17px;
+    padding: 8px 15px;
+    font-family: 'Segoe UI';
+    font-size: 9.5pt;
     font-weight: 650;
+    text-align: center;
 }
 QPushButton:hover {
     background: #4338CA;
@@ -241,7 +351,7 @@ QPushButton[nav="true"] {
     background: transparent;
     text-align: left;
     color: #CBD5E1;
-    padding: 11px 14px;
+    padding: 9px 13px;
     border: 1px solid transparent;
     border-radius: 13px;
 }
@@ -298,6 +408,16 @@ QTableWidget {
     gridline-color: #EEF2F7;
     selection-background-color: #4F46E5;
     selection-color: #F9FAFB;
+    font-family: 'Segoe UI';
+    font-size: 9.5pt;
+}
+QTableWidget::item {
+    padding: 7px 9px;
+    border-bottom: 1px solid #EEF2F7;
+}
+QTableWidget::item:hover {
+    background: #EEF2FF;
+    color: #172033;
 }
 QTableWidget::item:selected {
     background: #4F46E5;
@@ -310,8 +430,10 @@ QHeaderView::section {
     color: #334155;
     border: 0;
     border-bottom: 1px solid #DDE6F2;
-    padding: 11px 9px;
-    font-weight: 650;
+    padding: 10px 9px;
+    font-family: 'Segoe UI';
+    font-size: 9.5pt;
+    font-weight: 700;
 }
 QProgressBar { background: #DDE6F2; border: 0; border-radius: 3px; }
 QProgressBar::chunk {
