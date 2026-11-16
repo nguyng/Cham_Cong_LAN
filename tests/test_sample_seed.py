@@ -2,8 +2,10 @@ import sqlite3
 import subprocess
 import sys
 from contextlib import closing
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from scripts import seed_sample_data
 
@@ -80,8 +82,41 @@ def test_seed_data_is_repeatable_and_creates_five_samples():
             counts = {
                 name: connection.execute(query).fetchone()[0] for name, query in queries.items()
             }
+            first_attendance = connection.execute(
+                "SELECT ar.check_in_at, ar.check_out_at, ar.worked_minutes, ar.break_minutes "
+                "FROM attendance_records ar "
+                "JOIN employees e ON e.id = ar.employee_id "
+                "WHERE e.employee_code = 'NV001'"
+            ).fetchone()
 
         assert counts == dict.fromkeys(queries, 5)
+        check_in = datetime.fromisoformat(first_attendance[0]).replace(tzinfo=UTC)
+        check_out = datetime.fromisoformat(first_attendance[1]).replace(tzinfo=UTC)
+        local_check_in = check_in.astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))
+        assert local_check_in.hour == 8
+        assert local_check_in.utcoffset() == timedelta(hours=7)
+        assert first_attendance[2] == int((check_out - check_in).total_seconds() // 60) - first_attendance[3]
+
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute(
+                "UPDATE employees SET full_name = ? WHERE employee_code = 'NV001'",
+                ("Dữ liệu cần giữ nguyên",),
+            )
+            connection.commit()
+        skipped = subprocess.run(
+            [*command, "--if-empty"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        with closing(sqlite3.connect(database)) as connection:
+            preserved_name = connection.execute(
+                "SELECT full_name FROM employees WHERE employee_code = 'NV001'"
+            ).fetchone()[0]
+        assert "bỏ qua dữ liệu mẫu" in skipped.stdout
+        assert preserved_name == "Dữ liệu cần giữ nguyên"
     finally:
         for suffix in ("", "-shm", "-wal"):
             database.with_name(database.name + suffix).unlink(missing_ok=True)

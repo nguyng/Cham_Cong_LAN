@@ -1,5 +1,4 @@
 import json
-from datetime import UTC, datetime
 
 from PySide6.QtCharts import (
     QBarCategoryAxis,
@@ -51,6 +50,7 @@ from PySide6.QtWidgets import (
 
 from app.network.api import ApiError
 from app.network.realtime import RealtimeThread
+from app.timezone import local_now, local_today, to_local_datetime
 from app.ui.attendance_portal import AttendancePortalMixin
 from app.ui.catalog import (
     ADMIN_PAGES,
@@ -67,12 +67,24 @@ from app.ui.excel_export import styled_workbook_bytes
 from app.ui.icons import decorate_button
 from app.ui.leave_portal import LeavePortalMixin
 from app.ui.payroll_ui import PayrollUiMixin
-from app.ui.style import ADMIN_DARK, ADMIN_LIGHT, DARK, LIGHT
+from app.ui.session_lifecycle import SessionLifecycleMixin
+from app.ui.style import ADMIN_LIGHT, LIGHT
 
 from ..files import write_bytes_atomic
 
 
-class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainWindow):
+def _local_qdate() -> QDate:
+    today = local_today()
+    return QDate(today.year, today.month, today.day)
+
+
+class MainWindow(
+    AttendancePortalMixin,
+    LeavePortalMixin,
+    PayrollUiMixin,
+    SessionLifecycleMixin,
+    QMainWindow,
+):
     session_ended = Signal(bool)
 
     @staticmethod
@@ -274,10 +286,12 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
         footer_box = QVBoxLayout(footer)
         footer_box.setContentsMargins(0, 8, 6, 0)
         footer_box.setSpacing(7)
-        theme = QPushButton("Sáng / Tối")
-        theme.setProperty("secondary", True)
-        theme.clicked.connect(self.toggle_theme)
-        footer_box.addWidget(theme)
+        self.theme_button = QPushButton("Chế độ tối")
+        self.theme_button.setObjectName("themeToggle")
+        self.theme_button.setProperty("secondary", True)
+        self.theme_button.setToolTip("Chuyển sang chế độ tối")
+        self.theme_button.clicked.connect(self.toggle_theme)
+        footer_box.addWidget(self.theme_button)
         logout = QPushButton("Đăng xuất")
         logout.setProperty("danger", True)
         logout.clicked.connect(self.logout)
@@ -366,6 +380,7 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
             series = QBarSeries()
             series.append(self.chart_values)
             chart = QChart()
+            self.dashboard_chart = chart
             chart.addSeries(series)
             chart.createDefaultAxes()
             chart.setTitle("Tình hình trong ngày")
@@ -520,7 +535,7 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
             layout.addStretch()
 
             def update_clock():
-                now = datetime.now()
+                now = local_now()
                 self.attendance_clock.setText(now.strftime("%H:%M:%S"))
                 self.attendance_date.setText(
                     f"{self.vietnamese_weekday(now.weekday())}, {now.strftime('%d/%m/%Y')}"
@@ -532,34 +547,49 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
             timer.start(1000)
             QTimer.singleShot(120, self.refresh_attendance_panel)
             return self.vertical_page_scroller(page)
-        toolbar, controls = QFrame(objectName="toolbar"), QHBoxLayout()
-        toolbar.setLayout(controls)
-        controls.setContentsMargins(12, 10, 12, 10)
-        controls.setSpacing(8)
+        toolbar = QFrame(objectName="toolbar")
+        split_toolbar = name in ("Báo cáo", "Quản lý nhân viên")
+        if split_toolbar:
+            toolbar_layout = QVBoxLayout(toolbar)
+            toolbar_layout.setContentsMargins(12, 10, 12, 10)
+            toolbar_layout.setSpacing(8)
+            filter_controls = QHBoxLayout()
+            action_controls = QHBoxLayout()
+            filter_controls.setSpacing(8)
+            action_controls.setSpacing(8)
+            toolbar_layout.addLayout(filter_controls)
+            toolbar_layout.addLayout(action_controls)
+        else:
+            action_controls = QHBoxLayout(toolbar)
+            action_controls.setContentsMargins(12, 10, 12, 10)
+            action_controls.setSpacing(8)
+            filter_controls = action_controls
         self.add_shadow(toolbar, blur=18, y_offset=4, alpha=20)
         table = QTableWidget()
         table.setProperty("page_name", name)
         self.configure_table(table)
         endpoint = self.endpoint_for(name)
-        self.add_page_filters(name, table, controls)
+        self.add_page_filters(name, table, filter_controls)
+        if split_toolbar:
+            filter_controls.addStretch()
         refresh = QPushButton("↻ Làm mới")
         refresh.setProperty("secondary", True)
         refresh.setToolTip("Đặt lại bộ lọc, phân trang và tải dữ liệu mới nhất")
         refresh.clicked.connect(lambda _=False, t=table, e=endpoint: self.refresh_table(t, e))
-        controls.addWidget(refresh)
-        if self.admin_only:
+        action_controls.addWidget(refresh)
+        if self.admin_only and name != "Báo cáo":
             export = QPushButton("⇩ Xuất Excel")
             export.setProperty("secondary", True)
             export.clicked.connect(lambda _=False, t=table: self.export_table_excel(t))
-            controls.addWidget(export)
+            action_controls.addWidget(export)
         for label, handler in self.actions_for(name, table):
             button = QPushButton(label)
             if label.startswith("Xóa"):
                 button.setProperty("danger", True)
             button.clicked.connect(handler)
-            controls.addWidget(button)
-        controls.addStretch()
-        layout.addWidget(self.toolbar_scroller(toolbar))
+            action_controls.addWidget(button)
+        action_controls.addStretch()
+        layout.addWidget(self.toolbar_scroller(toolbar, height=126 if split_toolbar else 72))
         loading = QProgressBar()
         loading.setRange(0, 0)
         loading.setTextVisible(False)
@@ -694,10 +724,10 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
         ):
             start = QDateEdit(calendarPopup=True)
             start.setDisplayFormat("dd/MM/yyyy")
-            start.setDate(QDate.currentDate().addMonths(-1))
+            start.setDate(_local_qdate().addMonths(-1))
             end = QDateEdit(calendarPopup=True)
             end.setDisplayFormat("dd/MM/yyyy")
-            end.setDate(QDate.currentDate())
+            end.setDate(_local_qdate())
             controls.addWidget(QLabel("Từ"))
             controls.addWidget(start)
             controls.addWidget(QLabel("Đến"))
@@ -774,7 +804,7 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 widget.setCurrentIndex(0)
             elif isinstance(widget, QDateEdit):
                 widget.setDate(
-                    QDate.currentDate().addMonths(-1) if key == "start" else QDate.currentDate()
+                    _local_qdate().addMonths(-1) if key == "start" else _local_qdate()
                 )
         state = self.table_pagination.get(table)
         if state:
@@ -861,7 +891,9 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
 
     def actions_for(self, name, table):
         common = {
-            "Quản lý nhân viên": [("Gửi Random Check", lambda: self.trigger_random_check(table))],
+            "Xác minh ngẫu nhiên": [
+                ("Gửi Random Check", lambda: self.trigger_random_check(table))
+            ],
             "Lịch sử": [("Yêu cầu điều chỉnh", lambda: self.request_adjustment(table))],
             "Nghỉ phép": [
                 ("Tạo đơn", lambda: self.create_leave(table)),
@@ -901,7 +933,6 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 ("Thêm", lambda: self.create_employee(table)),
                 ("Sửa", lambda: self.edit_employee(table)),
                 ("Ngừng/Kích hoạt", lambda: self.toggle_employee(table)),
-                ("Gửi Random Check", lambda: self.trigger_random_check(table)),
                 ("Xóa", lambda: self.delete_record(table, "employees")),
             ],
             "Phòng ban": [
@@ -955,6 +986,7 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 ("Xóa", lambda: self.delete_record(table, "security-alerts")),
             ],
             "Xác minh ngẫu nhiên": [
+                ("Gửi Random Check", lambda: self.trigger_random_check(table)),
                 ("Xóa", lambda: self.delete_record(table, "random-checks")),
             ],
             "Tài khoản": [
@@ -995,8 +1027,8 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 params.pop(key, None)
         if path == "/api/v1/reports/attendance" and not {"start", "end"} <= params.keys():
             params.update(
-                start=QDate.currentDate().addMonths(-1).toString("yyyy-MM-dd"),
-                end=QDate.currentDate().toString("yyyy-MM-dd"),
+                start=_local_qdate().addMonths(-1).toString("yyyy-MM-dd"),
+                end=_local_qdate().toString("yyyy-MM-dd"),
             )
         pagination_state = self.table_pagination.get(table)
         if pagination_state:
@@ -1100,7 +1132,9 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
         if text in STATUS_TEXT:
             return STATUS_TEXT[text]
         if "T" in text and len(text) >= 16:
-            return text.replace("T", " ")[:19]
+            localized = to_local_datetime(text)
+            if localized:
+                return localized.strftime("%d/%m/%Y %H:%M:%S")
         return text
 
     @staticmethod
@@ -1116,6 +1150,8 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
             "REJECTED": ("#991B1B", "#FEE2E2"),
             "MISSED": ("#991B1B", "#FEE2E2"),
             "LATE": ("#991B1B", "#FEE2E2"),
+            "LATE_AND_EARLY": ("#991B1B", "#FEE2E2"),
+            "EARLY_LEAVE": ("#9A3412", "#FFEDD5"),
             "EMPLOYEE": ("#1E40AF", "#DBEAFE"),
         }
         if str(value) in palette:
@@ -1199,8 +1235,16 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
         row = self.selected(table)
         if not row:
             return
-        departments = self.api.request("GET", "/api/v1/departments", params={"active": True})
-        positions = self.api.request("GET", "/api/v1/positions", params={"active": True})
+        try:
+            departments = self.api.request(
+                "GET", "/api/v1/departments", params={"active": True}
+            )
+            positions = self.api.request(
+                "GET", "/api/v1/positions", params={"active": True}
+            )
+        except ApiError as exc:
+            QMessageBox.warning(self, "Không tải được danh mục", str(exc))
+            return
         fields = [
             Field("full_name", "Họ tên", value=row.get("full_name")),
             Field("email", "Email", value=row.get("email")),
@@ -1357,7 +1401,7 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 "choice",
                 options=[(x["name"], x["id"]) for x in leave_types],
             ),
-            Field("year", "Năm", "int", QDate.currentDate().year()),
+            Field("year", "Năm", "int", _local_qdate().year()),
             Field("allocated_days", "Số ngày cấp", "decimal"),
         ]
         if self.submit_dialog("Cấp quỹ phép", fields, "PUT", "/api/v1/leave-balances"):
@@ -1551,27 +1595,58 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 QMessageBox.warning(self, "Không cập nhật được nhân viên", str(exc))
 
     def trigger_random_check(self, table):
-        row = self.selected(table)
-        if not row:
+        employees = [
+            employee
+            for employee in self.safe_get("/api/v1/employees", params={"active": True})
+            if employee.get("active", True)
+        ]
+        if not employees:
+            QMessageBox.information(
+                self,
+                "Chưa có nhân viên",
+                "Không có nhân viên đang hoạt động trong phạm vi bạn quản lý.",
+            )
             return
-        if not row.get("active", True):
-            QMessageBox.warning(self, "Không thể xác minh", "Nhân viên này đã ngừng hoạt động.")
+        dialog = FormDialog(
+            "Gửi Random Check",
+            [
+                Field(
+                    "employee_id",
+                    "Nhân viên đang hoạt động",
+                    "choice",
+                    options=[
+                        (
+                            f"{employee.get('employee_code', '—')} — "
+                            f"{employee.get('full_name', employee['id'])}",
+                            employee["id"],
+                        )
+                        for employee in employees
+                    ],
+                )
+            ],
+            self,
+        )
+        if dialog.exec() != FormDialog.Accepted:
             return
+        employee_id = dialog.values()["employee_id"]
+        employee = next(item for item in employees if item["id"] == employee_id)
         if (
             QMessageBox.question(
                 self,
                 "Gửi xác minh hiện diện",
-                f"Gửi Random Check tới {row.get('full_name', row['id'])}?",
+                f"Gửi Random Check tới {employee.get('full_name', employee_id)}?",
             )
             != QMessageBox.Yes
         ):
             return
         try:
-            result = self.api.request("POST", f"/api/v1/random-checks/{row['id']}")
+            result = self.api.request("POST", f"/api/v1/random-checks/{employee_id}")
+            self.load_table(table, "/api/v1/random-checks")
             QMessageBox.information(
                 self,
                 "Đã gửi Random Check",
-                f"Yêu cầu #{result['id']} đã được gửi. Theo dõi tại trang Xác minh ngẫu nhiên.",
+                f"Yêu cầu #{result['id']} đã được gửi tới "
+                f"{employee.get('full_name', employee_id)}.",
             )
         except ApiError as exc:
             QMessageBox.warning(self, "Không gửi được Random Check", str(exc))
@@ -1733,8 +1808,8 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
                 value = widget.text().strip()
             if value is not None and value != "":
                 params[key] = value
-        params.setdefault("start", QDate.currentDate().addMonths(-1).toString("yyyy-MM-dd"))
-        params.setdefault("end", QDate.currentDate().toString("yyyy-MM-dd"))
+        params.setdefault("start", _local_qdate().addMonths(-1).toString("yyyy-MM-dd"))
+        params.setdefault("end", _local_qdate().toString("yyyy-MM-dd"))
         try:
             content = self.api.download(f"/api/v1/reports/attendance.{extension}", params)
             write_bytes_atomic(path, content)
@@ -1779,187 +1854,3 @@ class MainWindow(AttendancePortalMixin, LeavePortalMixin, PayrollUiMixin, QMainW
             self.show_toast(f"Đã xuất dữ liệu: {path}")
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Không xuất được file", str(exc))
-
-    def refresh_dashboard(self):
-        if hasattr(self, "metrics") or hasattr(self, "admin_metrics"):
-            try:
-                params = {"mine": True} if self.employee_portal else None
-                data = self.api.request("GET", "/api/v1/dashboard", params=params)
-                for key, label in getattr(self, "metrics", {}).items():
-                    label.setText(str(data.get(key, 0)))
-                for key, label in getattr(self, "admin_metrics", {}).items():
-                    label.setText(str(data.get(key, 0)))
-                if hasattr(self, "chart_values"):
-                    for index, key in enumerate(getattr(self, "metrics", {})):
-                        self.chart_values.replace(index, float(data.get(key, 0)))
-            except ApiError as exc:
-                self.connection_state(False)
-                if not self._dashboard_error_shown:
-                    self._dashboard_error_shown = True
-                    self.show_toast(f"Không cập nhật được tổng quan: {exc}", error=True)
-
-    def realtime_message(self, payload):
-        if payload.get("type") == "random_check":
-            self.show_random_check(payload)
-        elif payload.get("type") in (
-            "attendance_changed",
-            "leave_requested",
-            "leave_cancelled",
-            "security_alerts_updated",
-        ):
-            self.refresh_dashboard()
-            if payload.get("type") == "attendance_changed":
-                self.refresh_attendance_panel()
-
-    def show_random_check(self, payload):
-        try:
-            expires_at = datetime.fromisoformat(payload["expires_at"].replace("Z", "+00:00"))
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=UTC)
-        except (KeyError, TypeError, ValueError):
-            QMessageBox.warning(self, "Random Check", "Yêu cầu xác minh không có hạn hợp lệ.")
-            return
-
-        dialog = QMessageBox(self)
-        dialog.setWindowTitle("Random Check — Xác minh hiện diện")
-        dialog.setIcon(QMessageBox.Question)
-        dialog.setText("Bạn có đang làm việc tại máy đã đăng ký không?")
-        dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        confirm_button = dialog.button(QMessageBox.Yes)
-        confirm_button.setText("Xác nhận hiện diện")
-        dialog.button(QMessageBox.No).setText("Không xác nhận")
-        timer = QTimer(dialog)
-        remaining = {"seconds": 0}
-
-        def update_countdown():
-            seconds = max(0, int((expires_at - datetime.now(UTC)).total_seconds() + 0.999))
-            remaining["seconds"] = seconds
-            dialog.setInformativeText(f"Thời gian còn lại: {seconds:02d} giây")
-            if seconds <= 0:
-                timer.stop()
-                confirm_button.setEnabled(False)
-                dialog.setText("Yêu cầu Random Check đã hết hạn.")
-                QTimer.singleShot(1000, dialog.reject)
-
-        timer.timeout.connect(update_countdown)
-        update_countdown()
-        if remaining["seconds"] > 0:
-            timer.start(250)
-        accepted = dialog.exec() == QMessageBox.Yes and remaining["seconds"] > 0
-        timer.stop()
-        if not accepted:
-            return
-        try:
-            self.api.request(
-                "POST",
-                "/api/v1/random-checks/respond",
-                json={"challenge_token": payload["challenge_token"]},
-            )
-            self.show_toast("Đã xác minh hiện diện thành công.")
-        except ApiError as exc:
-            QMessageBox.warning(self, "Xác minh thất bại", str(exc))
-
-    def connection_state(self, connected):
-        self.connection.setText("● Đã kết nối" if connected else "● Mất kết nối — đang thử lại")
-        self.connection.setStyleSheet("color: #22C55E" if connected else "color: #EF4444")
-        if connected:
-            self._realtime_ever_connected = True
-            self._local_server_shutdown_generation += 1
-            self._dashboard_error_shown = False
-            self._realtime_error_shown = False
-        elif self._realtime_ever_connected and getattr(self.api, "local_server", False):
-            self._local_server_shutdown_generation += 1
-            generation = self._local_server_shutdown_generation
-            QTimer.singleShot(
-                2500,
-                lambda current=generation: self._close_after_local_server_loss(current),
-            )
-
-    def _close_after_local_server_loss(self, generation):
-        if (
-            generation != self._local_server_shutdown_generation
-            or self._session_end_emitted
-        ):
-            return
-        self.connection.setText("● Server nội bộ đã dừng — đang đóng ứng dụng")
-        self.close()
-
-    def realtime_error(self, message):
-        self.connection_state(False)
-        self.connection.setToolTip(message)
-        if not self._realtime_error_shown:
-            self._realtime_error_shown = True
-            self.show_toast(message, error=True)
-
-    def toggle_theme(self):
-        self.dark = not self.dark
-        if self.admin_only:
-            self.setStyleSheet(ADMIN_DARK if self.dark else ADMIN_LIGHT)
-        else:
-            self.setStyleSheet(DARK if self.dark else LIGHT)
-        if hasattr(self, "payroll_data"):
-            self.render_payroll_charts(self.payroll_data)
-
-    def show_toast(self, message, error=False):
-        if hasattr(self, "toast") and self.toast:
-            self.toast.deleteLater()
-        self.toast = QFrame(self.centralWidget())
-        self.toast.setStyleSheet(
-            "QFrame { background: %s; border-radius: 10px; } "
-            "QLabel { color: white; background: transparent; padding: 11px 16px; font-weight: 600; }"
-            % ("#B91C1C" if error else ("#0E7490" if self.admin_only else "#166534"))
-        )
-        box = QHBoxLayout(self.toast)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.addWidget(QLabel(message))
-        self.toast.adjustSize()
-        margin = 24
-        self.toast.move(
-            self.centralWidget().width() - self.toast.width() - margin,
-            self.centralWidget().height() - self.toast.height() - margin,
-        )
-        effect = QGraphicsOpacityEffect(self.toast)
-        self.toast.setGraphicsEffect(effect)
-        self.toast_animation = QPropertyAnimation(effect, b"opacity", self)
-        self.toast_animation.setDuration(180)
-        self.toast_animation.setStartValue(0.0)
-        self.toast_animation.setEndValue(1.0)
-        self.toast.show()
-        self.toast.raise_()
-        self.toast_animation.start()
-        QTimer.singleShot(3200, self.toast.hide)
-
-    def logout(self):
-        try:
-            self.api.request("POST", "/api/v1/auth/logout")
-        except ApiError as exc:
-            if (
-                QMessageBox.question(
-                    self,
-                    "Không kết nối được Server",
-                    f"Không thể thu hồi phiên trên Server: {exc}\nVẫn đăng xuất?",
-                )
-                != QMessageBox.Yes
-            ):
-                return
-        self.return_to_login()
-
-    def return_to_login(self):
-        """End the current UI session without terminating the desktop process."""
-        self.api.clear_session()
-        self._logout_requested = True
-        self._finish_session(logged_out=True)
-
-    def _finish_session(self, logged_out):
-        if self._session_end_emitted:
-            return
-        self.realtime.stop()
-        self.realtime.wait(2000)
-        self._session_end_emitted = True
-        if logged_out:
-            self.hide()
-        self.session_ended.emit(logged_out)
-
-    def closeEvent(self, event):
-        self._finish_session(logged_out=self._logout_requested)
-        event.accept()

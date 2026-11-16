@@ -531,17 +531,17 @@ def create_employee(payload: EmployeeIn, request: Request, db: Db, admin: Admin)
         raise HTTPException(409, "Chưa khởi tạo vai trò hệ thống")
     employee_data = payload.model_dump(exclude={"username", "temporary_password", "role"})
     item = Employee(**employee_data)
-    db.add(item)
-    db.flush()
-    user = User(
-        username=payload.username,
-        password_hash=hash_password(payload.temporary_password),
-        role_id=role.id,
-        employee_id=item.id,
-    )
-    db.add(user)
-    audit(db, "EMPLOYEE_CREATED", admin, client_ip(request), item, after=employee_data)
     try:
+        db.add(item)
+        db.flush()
+        user = User(
+            username=payload.username,
+            password_hash=hash_password(payload.temporary_password),
+            role_id=role.id,
+            employee_id=item.id,
+        )
+        db.add(user)
+        audit(db, "EMPLOYEE_CREATED", admin, client_ip(request), item, after=employee_data)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -777,7 +777,11 @@ def list_assignments(
             "employee_code": x.employee.employee_code,
             "full_name": x.employee.full_name,
             "shift_id": x.shift_id,
+            "shift_code": x.shift.code,
             "shift_name": x.shift.name,
+            "shift_start_time": x.shift.start_time.strftime("%H:%M"),
+            "shift_end_time": x.shift.end_time.strftime("%H:%M"),
+            "work_timezone": settings.work_timezone,
             "work_date": x.work_date,
         },
     )

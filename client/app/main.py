@@ -85,6 +85,7 @@ def main(admin_only: bool = False):
             "Hãy kiểm tra config.json hoặc khôi phục từ config.example.json.",
         )
         return 1
+    application.aboutToQuit.connect(api.close)
     active_windows = {"login": None, "main": None}
 
     def end_session(logged_out, window):

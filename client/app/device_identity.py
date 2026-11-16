@@ -82,14 +82,22 @@ def _installation_id(config_path: Path) -> str | None:
 def machine_fingerprint(config_path: Path) -> str:
     """Hash stable OS and installation identifiers without exposing raw hardware IDs."""
 
-    components = {
-        "machine_id": _system_machine_id(),
-        "volume_serial": _windows_volume_serial(),
-        "installation_id": _installation_id(config_path),
-        "host": socket.gethostname(),
-        "platform": platform.system(),
-    }
+    machine_id = _system_machine_id()
+    volume_serial = _windows_volume_serial()
+    if machine_id or volume_serial:
+        # Do not mix mutable values such as the hostname or the generated
+        # device.id into a hardware-backed identity. Otherwise clearing a
+        # runtime file or renaming the PC would require device approval again.
+        components = {
+            "machine_id": machine_id,
+            "volume_serial": volume_serial,
+        }
+    else:
+        installation_id = _installation_id(config_path)
+        components = {"installation_id": installation_id}
     stable = "|".join(f"{key}={value}" for key, value in components.items() if value)
     if not stable:
-        stable = f"fallback={socket.gethostname()}:{uuid.getnode()}"
+        stable = (
+            f"fallback={platform.system()}:{socket.gethostname()}:{uuid.getnode()}"
+        )
     return hashlib.sha256(stable.encode("utf-8")).hexdigest()

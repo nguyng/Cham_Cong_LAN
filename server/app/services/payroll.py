@@ -138,6 +138,7 @@ def payroll_report(
     attendance_query = select(AttendanceRecord).where(
         AttendanceRecord.employee_id.in_(employee_ids),
         AttendanceRecord.work_date.between(year_start, year_end),
+        AttendanceRecord.check_out_at.is_not(None),
     )
     for record in db.scalars(attendance_query):
         key = (record.employee_id, record.work_date.month)

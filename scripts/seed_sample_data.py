@@ -4,9 +4,10 @@ import argparse
 import os
 import sqlite3
 import sys
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_ROOT = ROOT / "server"
@@ -33,7 +34,24 @@ def arguments():
         action="store_true",
         help="Không tạo 5 bản sao lưu kiểm thử",
     )
+    parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="Chỉ nạp khi database chưa có tài khoản; không thay đổi database đang sử dụng",
+    )
     return parser.parse_args()
+
+
+def database_has_users(database_path: Path) -> bool:
+    if not database_path.is_file():
+        return False
+    with sqlite3.connect(database_path) as connection:
+        users_table = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'"
+        ).fetchone()
+        if users_table is None:
+            return False
+        return connection.execute("SELECT EXISTS(SELECT 1 FROM users LIMIT 1)").fetchone()[0] == 1
 
 
 def prepare_runtime(database_path: Path):
@@ -54,6 +72,7 @@ def prepare_runtime(database_path: Path):
 
 
 def seed(database_path: Path):
+    from app.core.config import get_settings
     from app.core.security import hash_password, hash_token
     from app.database.session import SessionLocal
     from app.models.entities import (
@@ -84,8 +103,9 @@ def seed(database_path: Path):
     )
     from sqlalchemy import delete, select, update
 
+    work_timezone = ZoneInfo(get_settings().work_timezone)
     now = datetime.now(UTC)
-    today = date.today()
+    today = datetime.now(work_timezone).date()
 
     def upsert(db, model, filters, values):
         item = db.scalar(select(model).filter_by(**filters))
@@ -510,17 +530,19 @@ def seed(database_path: Path):
                 {"employee_id": employee.id, "work_date": work_date},
                 {"shift_id": shift.id},
             )
-            check_in = datetime.combine(work_date, shift.start_time, tzinfo=UTC) + timedelta(
-                minutes=(0, 22, 0, 18, 3)[index]
-            )
+            check_in = (
+                datetime.combine(work_date, shift.start_time, tzinfo=work_timezone)
+                + timedelta(minutes=(0, 22, 0, 18, 3)[index])
+            ).astimezone(UTC)
             check_out = None
             if index < 4:
                 end_date = work_date + timedelta(
                     days=1 if shift.end_time <= shift.start_time else 0
                 )
-                check_out = datetime.combine(end_date, shift.end_time, tzinfo=UTC) + timedelta(
-                    minutes=(60, 45, 30, -25, 0)[index]
-                )
+                check_out = (
+                    datetime.combine(end_date, shift.end_time, tzinfo=work_timezone)
+                    + timedelta(minutes=(60, 45, 30, -25, 0)[index])
+                ).astimezone(UTC)
             attendance = upsert(
                 db,
                 AttendanceRecord,
@@ -551,8 +573,8 @@ def seed(database_path: Path):
                     "device_id": device.id,
                     "status": attendance_statuses[index],
                     "late_minutes": (0, 22, 0, 18, 0)[index],
-                    "early_leave_minutes": (0, 0, 0, 25, 0)[index],
-                    "worked_minutes": (540, 503, 510, 437, 0)[index],
+                    "early_leave_minutes": (0, 0, 0, 15, 0)[index],
+                    "worked_minutes": (540, 458, 465, 377, 0)[index],
                     "break_minutes": shift.break_minutes,
                     "overtime_minutes": (60, 45, 30, 0, 0)[index],
                     "approved_overtime_minutes": (60, 0, 0, 0, 0)[index],
@@ -940,6 +962,9 @@ def main():
     configure_console_encoding()
     options = arguments()
     database_path = options.database.resolve()
+    if options.if_empty and database_has_users(database_path):
+        print(f"Database đã có tài khoản, bỏ qua dữ liệu mẫu: {database_path}")
+        return
     prepare_runtime(database_path)
     summary = seed(database_path)
     legacy_findings = find_legacy_demo_values(database_path)

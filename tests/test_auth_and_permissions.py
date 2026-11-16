@@ -56,6 +56,11 @@ def test_manager_employee_portal_scope_only_returns_own_data(client, manager_hea
     assert department_schedule.status_code == 200
     assert own_schedule.status_code == 200
     assert department_schedule.json()["pagination"]["total"] == 1
+    scheduled_shift = department_schedule.json()["items"][0]
+    assert scheduled_shift["shift_code"] == "HC"
+    assert scheduled_shift["shift_start_time"] == "00:00"
+    assert scheduled_shift["shift_end_time"] == "23:59"
+    assert scheduled_shift["work_timezone"] == "Asia/Ho_Chi_Minh"
     assert own_schedule.json()["pagination"]["total"] == 0
     assert department_dashboard.json()["total_employees"] == 3
     assert own_dashboard.json()["total_employees"] == 1

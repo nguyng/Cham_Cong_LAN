@@ -9,6 +9,7 @@ import sys
 from urllib.parse import urlparse
 
 import httpx
+from websockets.exceptions import WebSocketException
 from websockets.sync.client import connect
 
 
@@ -37,8 +38,12 @@ def websocket_round_trip(
 ) -> dict:
     parsed = urlparse(server_url)
     scheme = "wss" if parsed.scheme == "https" else "ws"
-    url = f"{scheme}://{parsed.netloc}/api/v1/ws?token={token}"
-    arguments = {"open_timeout": timeout, "close_timeout": timeout}
+    url = f"{scheme}://{parsed.netloc}/api/v1/ws"
+    arguments = {
+        "additional_headers": {"Authorization": f"Bearer {token}"},
+        "open_timeout": timeout,
+        "close_timeout": timeout,
+    }
     if scheme == "wss":
         arguments["ssl"] = context
     with connect(url, **arguments) as websocket:
@@ -67,11 +72,11 @@ def main() -> int:
     parsed = urlparse(server_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         parser.error("--server-url phải là URL HTTP/HTTPS đầy đủ")
-    context = tls_context(arguments.ca_file) if parsed.scheme == "https" else None
     checks: dict[str, object] = {}
     token = None
 
     try:
+        context = tls_context(arguments.ca_file) if parsed.scheme == "https" else None
         with httpx.Client(
             base_url=server_url, verify=context or True, timeout=arguments.timeout
         ) as client:
@@ -100,17 +105,19 @@ def main() -> int:
                 )
                 login.raise_for_status()
                 token = login.json()["access_token"]
-                checks["websocket"] = websocket_round_trip(
-                    server_url, token, context, arguments.timeout
-                )
-                logout = client.post(
-                    "/api/v1/auth/logout",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                logout.raise_for_status()
-                token = None
-                checks["authenticated_logout"] = True
-    except (httpx.HTTPError, OSError, ValueError, KeyError, RuntimeError) as exc:
+                try:
+                    checks["websocket"] = websocket_round_trip(
+                        server_url, token, context, arguments.timeout
+                    )
+                finally:
+                    logout = client.post(
+                        "/api/v1/auth/logout",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    logout.raise_for_status()
+                    token = None
+                    checks["authenticated_logout"] = True
+    except (httpx.HTTPError, WebSocketException, OSError, ValueError, KeyError, RuntimeError) as exc:
         print(
             json.dumps(
                 {"ok": False, "error": str(exc), "checks": checks}, ensure_ascii=False, indent=2

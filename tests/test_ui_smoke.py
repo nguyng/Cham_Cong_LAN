@@ -8,8 +8,9 @@ def test_all_ui_pages_and_typed_dialog_construct():
     root = Path(__file__).resolve().parents[1]
     script = r"""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QScrollArea, QTableWidget
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton, QScrollArea, QTableWidget
 from app.network.realtime import RealtimeThread
+from app.timezone import APP_TIMEZONE_NAME, local_today
 from app.ui.dialogs import Field, FormDialog
 from app.ui.login import LoginDialog
 from app.ui.main_window import ADMIN_PAGES, EMPLOYEE_PAGES, MANAGER_PAGES, TABLE_COLUMNS, MainWindow
@@ -19,9 +20,11 @@ class DummyApi:
     role = "ADMIN"
     local_server = True
     device_registration_pending = False
-    websocket_url = "ws://127.0.0.1:1/api/v1/ws?token=test"
+    websocket_url = "ws://127.0.0.1:1/api/v1/ws"
     def __init__(self):
         self.calls = []
+        self.attendance_items = []
+        self.assignment_items = []
     def clear_session(self):
         self.token = None
         self.role = None
@@ -31,8 +34,14 @@ class DummyApi:
         self.calls.append((method, path, kwargs))
         if path == "/api/v1/dashboard":
             return {"present": 0, "late": 0, "pending_leave": 0, "open_alerts": 0}
-        if path in ("/api/v1/attendance", "/api/v1/shift-assignments"):
-            return {"items": [], "pagination": {"page": 1, "pages": 1, "total": 0}}
+        if path == "/api/v1/attendance":
+            return {"items": self.attendance_items, "pagination": {"page": 1, "pages": 1, "total": len(self.attendance_items)}}
+        if path == "/api/v1/shift-assignments":
+            return {"items": self.assignment_items, "pagination": {"page": 1, "pages": 1, "total": len(self.assignment_items)}}
+        if path == "/api/v1/employees":
+            return [{"id": 7, "employee_code": "NV007", "full_name": "Nhân viên bảy", "active": True}]
+        if method == "POST" and path == "/api/v1/random-checks/7":
+            return {"id": 99}
         if path == "/api/v1/payroll":
             return {
                 "summary": {"total_payroll": 0, "total_base": 0, "total_bonus": 0, "bonus_recipients": 0, "employee_count": 0},
@@ -72,6 +81,47 @@ assert mine_calls and all(call["params"]["mine"] is True for call in mine_calls)
 assert hasattr(window, "attendance_summary")
 assert hasattr(window, "attendance_location")
 assert hasattr(window, "show_random_check")
+assert APP_TIMEZONE_NAME == "Asia/Ho_Chi_Minh"
+assert MainWindow.format_cell("2026-11-13T00:00:00Z") == "13/11/2026 07:00:00"
+user_api.attendance_items = [{
+    "id": 10,
+    "work_date": "2026-11-13",
+    "shift_name": "Ca sáng",
+    "shift_start_time": "08:00",
+    "shift_end_time": "17:00",
+    "check_in_at": "2026-11-13T01:20:00Z",
+    "check_out_at": "2026-11-13T01:20:30Z",
+    "worked_minutes": 0,
+    "late_minutes": 20,
+    "is_late": True,
+    "status": "LATE",
+}]
+user_api.assignment_items = [{"shift_name": "Ca sáng", "work_date": "2026-11-13"}]
+window.refresh_attendance_panel()
+assert window.attendance_summary["shift"].text() == "Ca sáng • 08:00–17:00"
+assert window.attendance_summary["check_in"].text() == "08:20"
+assert window.attendance_summary["check_out"].text() == "08:20"
+assert window.attendance_summary["worked"].text() == "0 giờ 00 phút"
+assert "ĐI MUỘN" in window.attendance_status.text()
+assert "20 phút" in window.attendance_notice.text()
+today = local_today().isoformat()
+attendance_calls = [kwargs for _, path, kwargs in user_api.calls if path == "/api/v1/attendance"]
+assert attendance_calls[-1]["params"]["start"] == today
+assert attendance_calls[-1]["params"]["end"] == today
+user_buttons = {button.text(): button for button in window.findChildren(QPushButton)}
+assert not user_buttons["Yêu cầu điều chỉnh"].icon().isNull()
+assert not user_buttons["Đánh dấu đã đọc"].icon().isNull()
+assert window.theme_button.text() == "Chế độ tối"
+light_chart_theme = window.dashboard_chart.theme()
+window.toggle_theme()
+assert window.dark is True
+assert window.theme_button.text() == "Chế độ sáng"
+assert window.dashboard_chart.theme() != light_chart_theme
+assert "QWidget { background: #08111F; color: #E5E7EB; }" in window.styleSheet()
+window.toggle_theme()
+assert window.dark is False
+assert window.theme_button.text() == "Chế độ tối"
+assert window.dashboard_chart.theme() == light_chart_theme
 window.resize(900, 600)
 window.show_page(EMPLOYEE_PAGES.index("Chấm công"))
 window.show()
@@ -163,6 +213,40 @@ assert {
 assert "Xuất CSV" not in admin_labels
 assert "Xuất file" not in admin_labels
 assert "Reset" not in admin_labels
+admin_employee_page = admin_window.stack.widget(ADMIN_PAGES.index("Quản lý nhân viên"))
+admin_random_page = admin_window.stack.widget(ADMIN_PAGES.index("Xác minh ngẫu nhiên"))
+admin_employee_actions = {
+    button.text() for button in admin_employee_page.findChildren(QPushButton)
+}
+admin_random_actions = {
+    button.text() for button in admin_random_page.findChildren(QPushButton)
+}
+assert "Gửi Random Check" not in admin_employee_actions
+assert {"Gửi Random Check", "Xóa"} <= admin_random_actions
+
+# Random Check must select an active employee even when the verification table is empty.
+random_table = next(
+    table
+    for table in admin_random_page.findChildren(QTableWidget)
+    if table.property("page_name") == "Xác minh ngẫu nhiên"
+)
+original_dialog_exec = FormDialog.exec
+original_dialog_values = FormDialog.values
+original_question = QMessageBox.question
+original_information = QMessageBox.information
+FormDialog.exec = lambda self: FormDialog.Accepted
+FormDialog.values = lambda self: {"employee_id": 7}
+QMessageBox.question = lambda *args, **kwargs: QMessageBox.Yes
+QMessageBox.information = lambda *args, **kwargs: QMessageBox.Ok
+admin_window.trigger_random_check(random_table)
+FormDialog.exec = original_dialog_exec
+FormDialog.values = original_dialog_values
+QMessageBox.question = original_question
+QMessageBox.information = original_information
+assert any(
+    method == "POST" and path == "/api/v1/random-checks/7"
+    for method, path, _ in admin_window.api.calls
+)
 department_table = next(table for table in admin_window.findChildren(QTableWidget) if table.property("page_name") == "Phòng ban")
 admin_window.load_table(department_table, "/api/v1/departments")
 assert department_table.columnCount() >= 5
@@ -181,6 +265,24 @@ for button in admin_window.findChildren(QPushButton):
 admin_nav_scroll = admin_window.findChild(QScrollArea, "navScroll")
 assert admin_nav_scroll is not None
 assert admin_nav_scroll.verticalScrollBar().maximum() > 0
+for page_name in ("Quản lý nhân viên", "Báo cáo"):
+    admin_window.show_page(ADMIN_PAGES.index(page_name))
+    app.processEvents()
+    page = admin_window.stack.currentWidget()
+    split_scroll = page.findChild(QScrollArea, "toolbarScroll")
+    assert split_scroll is not None
+    assert split_scroll.minimumHeight() >= 126
+    toolbar = split_scroll.widget()
+    assert toolbar.height() <= split_scroll.viewport().height()
+    assert split_scroll.verticalScrollBar().maximum() == 0
+    toolbar_buttons = toolbar.findChildren(QPushButton)
+    assert toolbar_buttons
+    for button in toolbar_buttons:
+        assert toolbar.rect().contains(button.geometry()), (page_name, button.text())
+    if page_name == "Báo cáo":
+        report_labels = [button.text() for button in toolbar_buttons]
+        assert report_labels.count("Xuất Excel") == 1
+        assert report_labels.count("Xuất PDF") == 1
 toolbar_scroll = admin_window.stack.currentWidget().findChild(QScrollArea, "toolbarScroll")
 assert toolbar_scroll is not None
 assert toolbar_scroll.geometry().right() <= toolbar_scroll.parentWidget().contentsRect().right()
@@ -203,6 +305,20 @@ assert "Xóa" not in manager_admin_labels
 assert "Phê duyệt thiết bị" in MANAGER_PAGES
 assert "Lương & chuyên cần" in MANAGER_PAGES
 assert {"Phê duyệt", "Thu hồi", "Xóa thiết bị cũ", "Xuất Excel", "Làm mới"} <= manager_admin_labels
+manager_employee_page = manager_admin_window.stack.widget(
+    MANAGER_PAGES.index("Quản lý nhân viên")
+)
+manager_random_page = manager_admin_window.stack.widget(
+    MANAGER_PAGES.index("Xác minh ngẫu nhiên")
+)
+assert "Gửi Random Check" not in {
+    button.text() for button in manager_employee_page.findChildren(QPushButton)
+}
+manager_random_actions = {
+    button.text() for button in manager_random_page.findChildren(QPushButton)
+}
+assert "Gửi Random Check" in manager_random_actions
+assert "Xóa" not in manager_random_actions
 server_stop_events = []
 manager_admin_window.session_ended.connect(
     lambda logged_out: server_stop_events.append(logged_out)
@@ -251,6 +367,8 @@ class DummyApi:
     employee_id = None
     token = None
     def __init__(self, _config_path):
+        pass
+    def close(self):
         pass
 
 class DummyLogin:

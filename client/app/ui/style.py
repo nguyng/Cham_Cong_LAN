@@ -75,14 +75,18 @@ QFrame#adminSidebar QLabel#navSection {
     border-bottom: 1px solid #2D5B59;
 }
 QFrame#pageHeader {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.72 #F8FAFC, stop:1 #EEF2FF);
+    border: 1px solid #D9E4F4;
     border-left: 4px solid #4F46E5;
+    border-bottom: 2px solid #C7D2FE;
     border-radius: 17px;
 }
 QFrame#toolbar {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.78 #F8FAFC, stop:1 #EEF2F7);
+    border: 1px solid #D9E4F4;
+    border-bottom: 2px solid #CBD5E1;
     border-radius: 15px;
 }
 QScrollArea#toolbarScroll,
@@ -110,9 +114,11 @@ QScrollArea#toolbarScroll QScrollBar::handle:horizontal:hover { background: #4F4
 QScrollArea#toolbarScroll QScrollBar::add-line:horizontal,
 QScrollArea#toolbarScroll QScrollBar::sub-line:horizontal { width: 0; }
 QFrame#payrollToolbar {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.65 #F0F9FF, stop:1 #ECFEFF);
     border: 1px solid #BAE6FD;
     border-left: 4px solid #0EA5E9;
+    border-bottom: 2px solid #7DD3FC;
     border-radius: 16px;
 }
 QFrame#payrollMetricCard {
@@ -138,8 +144,10 @@ QFrame#payrollMetricCard[tone="violet"] {
 QLabel#payrollMetricLabel { color: #E0F2FE; font-size: 9pt; font-weight: 650; }
 QLabel#payrollMetricValue { color: #FFFFFF; font-size: 20pt; font-weight: 800; }
 QFrame#payrollChartCard {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F8FAFC);
     border: 1px solid #E2E8F0;
+    border-bottom: 2px solid #CBD5E1;
     border-radius: 18px;
 }
 QLabel#chartTitle { color: #172033; font-size: 12pt; font-weight: 750; }
@@ -153,44 +161,54 @@ QLabel#payrollPolicy {
     padding: 9px 13px;
 }
 QPushButton[payrollAction="true"] {
-    background: #F97316;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FB923C, stop:0.55 #F97316, stop:1 #EA580C);
     border-color: #F97316;
+    border-bottom: 3px solid #9A3412;
 }
 QPushButton[payrollAction="true"]:hover {
-    background: #C2410C;
-    border-color: #C2410C;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FDBA74, stop:0.5 #F97316, stop:1 #C2410C);
+    border-color: #EA580C;
 }
 QFrame#card, QFrame#adminCard, QFrame#emptyCard {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.74 #FBFDFF, stop:1 #F1F5F9);
     border: 1px solid #E5EAF2;
+    border-bottom: 2px solid #D8E0EC;
     border-radius: 18px;
 }
 QFrame#card[tone="blue"], QFrame#adminCard[tone="blue"],
 QFrame#attendanceSummaryCard[tone="blue"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.7 #F8FAFC, stop:1 #EEF2FF);
     border: 1px solid #E2E8F0;
     border-left: 4px solid #4F46E5;
 }
 QFrame#card[tone="violet"], QFrame#adminCard[tone="violet"],
 QFrame#attendanceSummaryCard[tone="violet"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.7 #FAF5FF, stop:1 #F5F3FF);
     border: 1px solid #E2E8F0;
     border-left: 4px solid #7C3AED;
 }
 QFrame#card[tone="mint"], QFrame#adminCard[tone="mint"],
 QFrame#attendanceSummaryCard[tone="mint"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.7 #F0FDFA, stop:1 #ECFEFF);
     border: 1px solid #E2E8F0;
     border-left: 4px solid #0F766E;
 }
 QFrame#card[tone="coral"], QFrame#adminCard[tone="coral"],
 QFrame#attendanceSummaryCard[tone="coral"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.7 #FFF7ED, stop:1 #FFEDD5);
     border: 1px solid #E2E8F0;
     border-left: 4px solid #EA580C;
 }
 QFrame#card[tone="amber"], QFrame#adminCard[tone="amber"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:0.7 #FFFBEB, stop:1 #FFF7ED);
     border: 1px solid #E2E8F0;
     border-left: 4px solid #D97706;
 }
@@ -218,9 +236,17 @@ QLabel#attendanceStatus {
 QLabel#attendanceStatus[state="idle"] { background: #334155; color: #E2E8F0; }
 QLabel#attendanceStatus[state="active"] { background: #166534; color: #DCFCE7; }
 QLabel#attendanceStatus[state="complete"] { background: #1D4ED8; color: #DBEAFE; }
+QLabel#attendanceStatus[state="late"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #9A3412, stop:0.55 #B45309, stop:1 #C2410C);
+    color: #FFF7ED;
+    border: 1px solid #FDBA74;
+}
 QFrame#attendanceActionCard, QFrame#attendanceSummaryCard {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.76 #FBFDFF, stop:1 #F1F5F9);
     border: 1px solid #E5EAF2;
+    border-bottom: 2px solid #D8E0EC;
     border-radius: 18px;
 }
 QFrame#attendanceGpsPanel {
@@ -245,21 +271,37 @@ QLabel#gpsTitle { color: #0E7490; font-size: 8pt; font-weight: 800; letter-spaci
 QLabel#gpsValue { color: #164E63; font-size: 10pt; font-weight: 650; }
 QLabel#sectionTitle { color: #172033; font-size: 14pt; font-weight: 750; }
 QPushButton[attendanceAction="checkin"] {
-    background: #15803D;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #22C55E, stop:0.52 #16A34A, stop:1 #15803D);
     border: 1px solid #16A34A;
+    border-bottom: 4px solid #14532D;
     border-radius: 16px;
     font-size: 13pt;
     font-weight: 800;
 }
-QPushButton[attendanceAction="checkin"]:hover { background: #166534; }
+QPushButton[attendanceAction="checkin"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #4ADE80, stop:0.5 #22C55E, stop:1 #166534);
+}
 QPushButton[attendanceAction="checkout"] {
-    background: #EA580C;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FB923C, stop:0.52 #F97316, stop:1 #EA580C);
     border: 1px solid #F97316;
+    border-bottom: 4px solid #9A3412;
     border-radius: 16px;
     font-size: 13pt;
     font-weight: 800;
 }
-QPushButton[attendanceAction="checkout"]:hover { background: #C2410C; }
+QPushButton[attendanceAction="checkout"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FDBA74, stop:0.5 #FB923C, stop:1 #C2410C);
+}
+QPushButton[attendanceAction="checkin"]:pressed,
+QPushButton[attendanceAction="checkout"]:pressed {
+    border-bottom-width: 1px;
+    padding-top: 11px;
+    padding-bottom: 7px;
+}
 QPushButton[attendanceAction="checkin"]:disabled,
 QPushButton[attendanceAction="checkout"]:disabled { background: #CBD5E1; color: #64748B; }
 QLabel#summaryTitle { color: #64748B; font-size: 9pt; font-weight: 650; }
@@ -282,18 +324,34 @@ QLabel#noticeIcon {
 }
 QLabel#noticeText { color: #1E3A5F; }
 QFrame#attendanceGuide {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F8FAFC);
     border: 1px solid #E5EAF2;
+    border-bottom: 2px solid #D8E0EC;
     border-radius: 18px;
 }
 QFrame#attendanceStep {
-    background: #F8FAFC;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F1F5F9);
     border: 1px solid #E2E8F0;
+    border-bottom: 2px solid #CBD5E1;
     border-radius: 15px;
 }
-QFrame#attendanceStep[tone="blue"] { background: #F8FAFC; border-left: 3px solid #4F46E5; }
-QFrame#attendanceStep[tone="mint"] { background: #F8FAFC; border-left: 3px solid #0F766E; }
-QFrame#attendanceStep[tone="coral"] { background: #F8FAFC; border-left: 3px solid #EA580C; }
+QFrame#attendanceStep[tone="blue"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:1 #EEF2FF);
+    border-left: 3px solid #4F46E5;
+}
+QFrame#attendanceStep[tone="mint"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:1 #ECFEFF);
+    border-left: 3px solid #0F766E;
+}
+QFrame#attendanceStep[tone="coral"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFFFFF, stop:1 #FFF7ED);
+    border-left: 3px solid #EA580C;
+}
 QFrame#attendanceStep[tone="mint"] QLabel#stepNumber {
     color: #0F766E; background: #CCFBF1;
 }
@@ -314,11 +372,17 @@ QLabel#stepNumber {
 }
 QLabel#stepTitle { color: #172033; font-weight: 750; }
 QLabel#stepText { color: #64748B; font-size: 9pt; }
-QFrame#emptyCard { background: #F8FAFC; border-style: dashed; }
+QFrame#emptyCard {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F1F5F9);
+    border-style: dashed;
+}
 QPushButton {
-    background: #4F46E5;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #818CF8, stop:0.18 #6366F1, stop:0.62 #4F46E5, stop:1 #4338CA);
     color: #FFFFFF;
-    border: 1px solid #4F46E5;
+    border: 1px solid #6366F1;
+    border-bottom: 3px solid #312E81;
     border-radius: 13px;
     padding: 8px 15px;
     font-family: 'Segoe UI';
@@ -327,26 +391,41 @@ QPushButton {
     text-align: center;
 }
 QPushButton:hover {
-    background: #4338CA;
-    border: 1px solid #4338CA;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #A5B4FC, stop:0.2 #818CF8, stop:0.62 #6366F1, stop:1 #4F46E5);
+    border: 1px solid #818CF8;
+    border-bottom: 3px solid #3730A3;
 }
-QPushButton:pressed { background: #3730A3; padding-top: 11px; padding-bottom: 9px; }
+QPushButton:pressed {
+    background: #3730A3;
+    border-bottom-width: 1px;
+    padding-top: 10px;
+    padding-bottom: 6px;
+}
 QPushButton:disabled { background: #94A3B8; color: #E2E8F0; }
 QPushButton[secondary="true"] {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.66 #F8FAFC, stop:1 #EEF2FF);
     color: #334155;
     border: 1px solid #C7D2FE;
+    border-bottom: 3px solid #A5B4FC;
 }
 QPushButton[secondary="true"]:hover {
-    background: #EEF2FF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:0.55 #EEF2FF, stop:1 #E0E7FF);
     color: #3730A3;
     border: 1px solid #A5B4FC;
 }
 QPushButton[danger="true"] {
-    background: #DC2626;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #F87171, stop:0.52 #EF4444, stop:1 #DC2626);
     border: 1px solid #DC2626;
+    border-bottom: 3px solid #7F1D1D;
 }
-QPushButton[danger="true"]:hover { background: #B91C1C; }
+QPushButton[danger="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FCA5A5, stop:0.5 #EF4444, stop:1 #B91C1C);
+}
 QPushButton[nav="true"] {
     background: transparent;
     text-align: left;
@@ -361,17 +440,21 @@ QPushButton[nav="true"]:hover {
     border: 1px solid rgba(255, 255, 255, 45);
 }
 QPushButton[nav="true"]:checked {
-    background: #4F46E5;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #4338CA, stop:0.55 #4F46E5, stop:1 #6366F1);
     color: #FFFFFF;
     border: 1px solid #6366F1;
 }
 QFrame#adminSidebar QPushButton[nav="true"]:checked {
-    background: #0F766E;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #115E59, stop:0.55 #0F766E, stop:1 #14B8A6);
     border: 1px solid #14B8A6;
 }
 QLineEdit, QComboBox, QDateEdit, QTimeEdit, QSpinBox, QDoubleSpinBox, QTextEdit {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F8FAFC);
     border: 1px solid #D8E0EC;
+    border-bottom: 2px solid #CBD5E1;
     border-radius: 12px;
     padding: 9px 11px;
     selection-background-color: #4F46E5;
@@ -382,8 +465,10 @@ QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus {
     background: #F8FBFF;
 }
 QGroupBox {
-    background: #FFFFFF;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F8FAFC);
     border: 1px solid #C7D2FE;
+    border-bottom: 2px solid #A5B4FC;
     border-radius: 14px;
     margin-top: 8px;
     padding: 10px;
@@ -402,8 +487,9 @@ QComboBox QAbstractItemView {
 }
 QTableWidget {
     background: #FFFFFF;
-    alternate-background-color: #F8FAFC;
-    border: 1px solid #E2E8F0;
+    alternate-background-color: #F1F5FF;
+    border: 1px solid #D9E4F4;
+    border-bottom: 2px solid #CBD5E1;
     border-radius: 17px;
     gridline-color: #EEF2F7;
     selection-background-color: #4F46E5;
@@ -416,20 +502,23 @@ QTableWidget::item {
     border-bottom: 1px solid #EEF2F7;
 }
 QTableWidget::item:hover {
-    background: #EEF2FF;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #EEF2FF, stop:1 #E0F2FE);
     color: #172033;
 }
 QTableWidget::item:selected {
-    background: #4F46E5;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #4338CA, stop:0.55 #4F46E5, stop:1 #6366F1);
     color: #F9FAFB;
     border-top: 1px solid #3730A3;
     border-bottom: 1px solid #3730A3;
 }
 QHeaderView::section {
-    background: #F1F5F9;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #F8FAFC, stop:0.58 #EEF2FF, stop:1 #E2E8F0);
     color: #334155;
     border: 0;
-    border-bottom: 1px solid #DDE6F2;
+    border-bottom: 2px solid #C7D2FE;
     padding: 10px 9px;
     font-family: 'Segoe UI';
     font-size: 9.5pt;
@@ -471,52 +560,190 @@ ADMIN_LIGHT = (
 )
 
 
-def _dark(style: str) -> str:
-    replacements = (
-        ("#F7F8FC", "#08111F"),
-        ("#F6F8FF", "#08111F"),
-        ("#F8FBFF", "#111C2E"),
-        ("#F5F7FB", "#08111F"),
-        ("#172033", "#E5E7EB"),
-        ("#FFFFFF", "#111C2E"),
-        ("#F8FAFC", "#142033"),
-        ("#E5EAF2", "#25344D"),
-        ("#D8E0EC", "#34445E"),
-        ("#E2E8F0", "#2B3A52"),
-        ("#EEF2F7", "#25344D"),
-        ("#EFF4FF", "#17263D"),
-        ("#DDE6F2", "#30415B"),
-        ("#334155", "#D7E0EC"),
-        ("#111827", "#F8FAFC"),
-        ("#64748B", "#AAB8CA"),
-        ("#E8EEF8", "#24344C"),
-        ("#26344D", "#E5E7EB"),
-        ("#D9E4F4", "#30445F"),
-        ("#DBEAFE", "#1E4D68"),
-        ("#EFF6FF", "#162A43"),
-        ("#F0F9FF", "#11283A"),
-        ("#F1F5F9", "#172033"),
-        ("#F5F3FF", "#251F3D"),
-        ("#ECFEFF", "#123039"),
-        ("#FFF7ED", "#382519"),
-        ("#FFFBEA", "#352F16"),
-        ("#EEF2FF", "#202A48"),
-        ("#E0F2FE", "#163047"),
-        ("#BFDBFE", "#254B70"),
-        ("#C7D2FE", "#3D4770"),
-        ("#DDD6FE", "#4A416C"),
-        ("#A5F3FC", "#246875"),
-        ("#FED7AA", "#704326"),
-        ("#FDE68A", "#675823"),
-        ("#CCFBF1", "#164E4A"),
-        ("#FFEDD5", "#57311F"),
-        ("#1E1B4B", "#E0E7FF"),
-        ("#475569", "#AAB8CA"),
-    )
-    for source, target in replacements:
-        style = style.replace(source, target)
-    return style
+def _dark(style: str, accent: str, accent_hover: str, accent_pressed: str) -> str:
+    """Append semantic dark rules without converting text colors into surfaces."""
+
+    overrides = f"""
+QWidget {{ background: #08111F; color: #E5E7EB; }}
+QLabel {{ background: transparent; }}
+QWidget#appShell, QDialog#employeeLogin, QDialog#adminLogin {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #07111F, stop:0.58 #0B1627, stop:1 #111B31);
+}}
+QFrame#sidebar, QFrame#adminSidebar {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #07111F, stop:0.55 #111C2E, stop:1 #172554);
+}}
+QFrame#adminSidebar {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #07111F, stop:0.55 #102A2E, stop:1 #134E4A);
+}}
+QScrollArea#navScroll, QScrollArea#navScroll QWidget#qt_scrollarea_viewport,
+QScrollArea#toolbarScroll, QScrollArea#toolbarScroll QWidget#qt_scrollarea_viewport,
+QScrollArea#pageScroll, QScrollArea#pageScroll QWidget#qt_scrollarea_viewport,
+QWidget#navContent, QFrame#sidebarFooter {{ background: transparent; }}
+QFrame#pageHeader, QFrame#toolbar, QFrame#payrollToolbar,
+QFrame#payrollChartCard, QFrame#card, QFrame#adminCard, QFrame#emptyCard,
+QFrame#attendanceActionCard, QFrame#attendanceSummaryCard,
+QFrame#attendanceGuide, QFrame#attendanceStep {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #18253A, stop:0.7 #111C2E, stop:1 #0D1728);
+    border-color: #2B3A52;
+    border-bottom-color: #07111F;
+}}
+QFrame#pageHeader {{ border-left-color: {accent}; }}
+QFrame#payrollToolbar {{ border-left-color: #0EA5E9; }}
+QFrame#card[tone="blue"], QFrame#adminCard[tone="blue"],
+QFrame#card[tone="violet"], QFrame#adminCard[tone="violet"],
+QFrame#card[tone="mint"], QFrame#adminCard[tone="mint"],
+QFrame#card[tone="coral"], QFrame#adminCard[tone="coral"],
+QFrame#card[tone="amber"], QFrame#adminCard[tone="amber"],
+QFrame#attendanceSummaryCard[tone="blue"],
+QFrame#attendanceSummaryCard[tone="violet"],
+QFrame#attendanceSummaryCard[tone="mint"],
+QFrame#attendanceSummaryCard[tone="coral"] {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #18253A, stop:0.62 #111C2E, stop:1 #172554);
+}}
+QFrame#attendanceStep[tone="blue"],
+QFrame#attendanceStep[tone="mint"],
+QFrame#attendanceStep[tone="coral"] {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #18253A, stop:1 #111C2E);
+}}
+QFrame#attendanceGpsPanel, QFrame#attendanceNotice {{
+    background: #102A35;
+    border-color: #246875;
+}}
+QLabel#title, QLabel#emptyTitle, QLabel#sectionTitle, QLabel#stepTitle,
+QLabel#chartTitle, QLabel#summaryTitle, QLabel#summaryValue,
+QLabel#gpsTitle {{ color: #F8FAFC; }}
+QLabel#subtitle, QLabel#emptyText, QLabel#stepText,
+QLabel#gpsValue, QLabel#noticeText {{ color: #AAB8CA; }}
+QLineEdit, QComboBox, QDateEdit, QTimeEdit, QSpinBox, QDoubleSpinBox, QTextEdit {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #18253A, stop:1 #111C2E);
+    color: #E5E7EB;
+    border-color: #34445E;
+    selection-background-color: {accent};
+}}
+QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus,
+QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus {{
+    background: #142033;
+    border-color: {accent};
+}}
+QComboBox QAbstractItemView {{
+    background: #111C2E;
+    color: #E5E7EB;
+    border-color: #3D4770;
+    selection-background-color: {accent};
+}}
+QTableWidget {{
+    background: #111C2E;
+    alternate-background-color: #142033;
+    color: #E5E7EB;
+    border-color: #2B3A52;
+    gridline-color: #25344D;
+    selection-background-color: {accent};
+}}
+QTableWidget::item {{ border-bottom-color: #25344D; }}
+QTableWidget::item:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #202A48, stop:1 #18324A);
+    color: #F8FAFC;
+}}
+QTableWidget::item:selected {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {accent_pressed}, stop:0.55 {accent}, stop:1 {accent_hover});
+    color: #FFFFFF;
+    border-top-color: {accent_pressed};
+    border-bottom-color: {accent_pressed};
+}}
+QHeaderView::section {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #22314A, stop:0.58 #172033, stop:1 #111C2E);
+    color: #D7E0EC;
+    border-bottom-color: #30415B;
+}}
+QPushButton {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {accent_hover}, stop:0.38 {accent}, stop:1 {accent_pressed});
+    color: #FFFFFF;
+    border-color: {accent};
+    border-bottom-color: {accent_pressed};
+}}
+QPushButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {accent}, stop:0.62 {accent_hover}, stop:1 {accent_pressed});
+    border-color: {accent_hover};
+}}
+QPushButton:pressed {{ background: {accent_pressed}; border-bottom-width: 1px; }}
+QPushButton[danger="true"] {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #F87171, stop:0.52 #EF4444, stop:1 #B91C1C);
+    color: #FFFFFF;
+    border-color: #DC2626;
+    border-bottom-color: #7F1D1D;
+}}
+QPushButton[danger="true"]:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FCA5A5, stop:0.5 #EF4444, stop:1 #991B1B);
+}}
+QPushButton[attendanceAction="checkin"] {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #22C55E, stop:0.52 #16A34A, stop:1 #15803D);
+    border-color: #16A34A;
+    border-bottom-color: #14532D;
+}}
+QPushButton[attendanceAction="checkout"],
+QPushButton[payrollAction="true"] {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FB923C, stop:0.52 #F97316, stop:1 #EA580C);
+    border-color: #F97316;
+    border-bottom-color: #9A3412;
+}}
+QPushButton[attendanceAction="checkin"]:disabled,
+QPushButton[attendanceAction="checkout"]:disabled {{
+    background: #334155;
+    color: #94A3B8;
+    border-color: #475569;
+}}
+QPushButton[secondary="true"] {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #22314A, stop:1 #17263D);
+    color: #E5E7EB;
+    border-color: #3D4770;
+    border-bottom-color: #111827;
+}}
+QPushButton[secondary="true"]:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #2B3A56, stop:1 #202A48);
+    color: #FFFFFF;
+    border-color: {accent};
+}}
+QGroupBox {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #18253A, stop:1 #111C2E);
+    color: #E5E7EB;
+    border-color: #3D4770;
+    border-bottom-color: #07111F;
+}}
+QToolTip {{ background: #111827; color: #F8FAFC; border-color: #475569; }}
+QLabel#attendanceStatus[state="late"] {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #7C2D12, stop:0.55 #9A3412, stop:1 #C2410C);
+    color: #FFEDD5;
+    border-color: #FB923C;
+}}
+QLabel#payrollPolicy {{ background: #102A35; color: #A5F3FC; border-color: #246875; }}
+QProgressBar {{ background: #30415B; }}
+QProgressBar::chunk {{ background: {accent}; }}
+QScrollBar::handle:vertical {{ background: #475569; }}
+QScrollArea#toolbarScroll QScrollBar:horizontal {{ background: #172033; }}
+QScrollArea#toolbarScroll QScrollBar::handle:horizontal {{ background: #64748B; }}
+"""
+    return style + overrides
 
 
-DARK = _dark(LIGHT)
-ADMIN_DARK = _dark(ADMIN_LIGHT)
+DARK = _dark(LIGHT, "#6366F1", "#4F46E5", "#4338CA")
+ADMIN_DARK = _dark(ADMIN_LIGHT, "#0F766E", "#115E59", "#134E4A")

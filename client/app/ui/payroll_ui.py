@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView, QValueAxis
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
@@ -18,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.network.api import ApiError
+from app.timezone import local_now
 from app.ui.catalog import COLUMN_LABELS, TABLE_COLUMNS
 from app.ui.dialogs import Field
 
@@ -37,7 +36,7 @@ class PayrollUiMixin:
         self.add_shadow(toolbar, blur=18, y_offset=4, alpha=22)
 
         self.payroll_year = QComboBox()
-        current_year = datetime.now().year
+        current_year = local_now().year
         for year in range(current_year, current_year - 6, -1):
             self.payroll_year.addItem(f"Năm {year}", year)
         filters.addWidget(self.payroll_year)

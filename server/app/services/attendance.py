@@ -38,6 +38,26 @@ def shift_window(work_date: date, shift: Shift) -> tuple[datetime, datetime]:
     return start.astimezone(UTC), end.astimezone(UTC)
 
 
+def calculate_late_minutes(check_in_at: datetime, shift_start: datetime) -> int:
+    """Return actual delay once the common late threshold has been reached.
+
+    The application-wide policy is intentionally independent from legacy
+    per-shift grace values: 14 minutes is on time, while 15 minutes is late.
+    Keeping the actual delay (rather than only minutes beyond the threshold)
+    gives managers the value they need in attendance reports.
+    """
+
+    actual_delay = max(
+        0,
+        int((as_utc(check_in_at) - as_utc(shift_start)).total_seconds() // 60),
+    )
+    return (
+        actual_delay
+        if actual_delay >= get_settings().late_threshold_minutes
+        else 0
+    )
+
+
 def assignment_for_now(db: Session, employee_id: int, now: datetime) -> ShiftAssignment:
     current_work_date = local_date(now)
     candidate_dates = [current_work_date, current_work_date - timedelta(days=1)]
@@ -67,7 +87,7 @@ def check_in(
     location_accuracy_meters: float | None = None,
     geofence_distance_meters: float | None = None,
 ):
-    now = now or utc_now()
+    now = as_utc(now or utc_now())
     assignment = assignment_for_now(db, employee.id, now)
     existing = db.scalar(
         select(AttendanceRecord).where(
@@ -79,9 +99,7 @@ def check_in(
     if existing:
         raise HTTPException(409, "Ca này đã được check-in")
     shift_start, _ = shift_window(assignment.work_date, assignment.shift)
-    late = max(
-        0, int((now - shift_start).total_seconds() // 60) - assignment.shift.late_grace_minutes
-    )
+    late = calculate_late_minutes(now, shift_start)
     record = AttendanceRecord(
         employee_id=employee.id,
         shift_id=assignment.shift_id,
@@ -112,7 +130,7 @@ def check_out(
     location_accuracy_meters: float | None = None,
     geofence_distance_meters: float | None = None,
 ):
-    now = now or utc_now()
+    now = as_utc(now or utc_now())
     record = db.scalar(
         select(AttendanceRecord)
         .where(AttendanceRecord.employee_id == employee.id, AttendanceRecord.check_out_at.is_(None))
@@ -159,11 +177,7 @@ def check_out(
 
 def recalculate(record: AttendanceRecord):
     start, end = shift_window(record.work_date, record.shift)
-    record.late_minutes = max(
-        0,
-        int((as_utc(record.check_in_at) - start).total_seconds() // 60)
-        - record.shift.late_grace_minutes,
-    )
+    record.late_minutes = calculate_late_minutes(record.check_in_at, start)
     if not record.check_out_at:
         record.early_leave_minutes = 0
         record.status = AttendanceStatus.LATE if record.late_minutes else AttendanceStatus.OPEN

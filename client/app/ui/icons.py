@@ -1,5 +1,12 @@
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QPushButton, QSizePolicy, QStyle, QWidget
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QGraphicsDropShadowEffect,
+    QPushButton,
+    QSizePolicy,
+    QStyle,
+    QWidget,
+)
 
 
 def clean_button_text(text: str) -> str:
@@ -55,8 +62,14 @@ def action_icon(widget: QWidget, text: str, *, navigation: bool = False):
         icon = standard.SP_DialogSaveButton
     elif any(word in value for word in ("khôi phục", "tìm server", "mở")):
         icon = standard.SP_DialogOpenButton
+    elif "gửi" in value:
+        icon = standard.SP_ArrowForward
     elif any(word in value for word in ("thêm", "tạo", "phân ca", "cấp/")):
         icon = standard.SP_FileDialogNewFolder
+    elif "yêu cầu điều chỉnh" in value:
+        icon = standard.SP_FileDialogContentsView
+    elif "đánh dấu" in value:
+        icon = standard.SP_DialogYesButton
     elif any(word in value for word in ("duyệt", "xác nhận", "đăng nhập")):
         icon = standard.SP_DialogYesButton
     elif any(
@@ -85,5 +98,11 @@ def decorate_button(button: QPushButton, *, navigation: bool = False) -> None:
         QSizePolicy.Expanding if navigation else QSizePolicy.Minimum,
         QSizePolicy.Fixed,
     )
+    if not navigation and button.graphicsEffect() is None:
+        shadow = QGraphicsDropShadowEffect(button)
+        shadow.setBlurRadius(16.0)
+        shadow.setColor(QColor(15, 23, 42, 64))
+        shadow.setOffset(0.0, 3.0)
+        button.setGraphicsEffect(shadow)
     if not button.toolTip():
         button.setToolTip(text)

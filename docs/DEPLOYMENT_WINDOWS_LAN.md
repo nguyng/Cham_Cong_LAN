@@ -3,69 +3,30 @@
 ## 1. Chuẩn bị máy Server
 
 1. Cài Python 3.12 x64 nếu chạy mã nguồn. SQLite đã tích hợp trong Python, không cần cài database server.
-2. Chạy `scripts\setup.ps1`; dependency chỉ được cài trong `.venv` của dự án.
-3. Sao chép `server\.env.example` thành `server\.env` và đặt một `JWT_SECRET` ngẫu nhiên tối thiểu 32 ký tự.
-4. Giữ cấu hình database:
+2. Chạy `scripts\setup.ps1`; dependency chỉ được cài trong `.venv`, `server\.env` được tạo
+   với JWT secret ngẫu nhiên và dữ liệu mẫu chỉ được nạp nếu database chưa có tài khoản.
+3. Giữ cấu hình database:
 
    ```env
    DATABASE_URL=sqlite:///./data/attendance.db
    ```
 
-5. Tại thư mục `server`, chạy migration: `..\.venv\Scripts\python.exe -m alembic upgrade head`.
-6. Tạo Admin đầu tiên:
-
-   ```powershell
-   ..\.venv\Scripts\python.exe ..\scripts\bootstrap_admin.py `
-     --username admin --employee-code AD001 `
-     --name "Quản trị" --email admin@company.local
-   ```
+4. Chạy `scripts\run_all.ps1` để mở Server, Admin và User. Server tự chạy migration trước khi
+   nhận kết nối.
 
 SQLite được cấu hình tự động với foreign keys, WAL, synchronous NORMAL và thời gian chờ khóa 30 giây. Tệp database phải nằm trên ổ đĩa cục bộ của máy Server. Không đặt `.db` trên SMB/OneDrive/Google Drive và không chia sẻ tệp cho Client; Client chỉ truy cập HTTPS API.
 
-## 2. Bản đóng gói
+## 2. Chạy bằng terminal
 
-Khuyến nghị dùng nguyên thư mục `dist_portable\AttendanceServer` trên Server và các thư mục portable tương ứng trên Client/Admin. Bản portable không tự giải nén khi chạy nên tương thích tốt hơn với Endpoint Protection. Không lấy riêng file `.exe` ra khỏi thư mục `_internal` đi kèm.
-
-Đặt các tệp theo cấu trúc:
-
-```text
-C:\LANAttendance\
-├── AttendanceServer.exe
-├── server.env
-├── data\
-├── backups\
-└── certs\
-```
-
-Với bản `.exe`, tệp cấu hình phải tên `server.env` và nằm cạnh `AttendanceServer.exe`:
-
-```env
-ENVIRONMENT=production
-DATABASE_URL=sqlite:///./data/attendance.db
-JWT_SECRET=THAY_BANG_CHUOI_NGAU_NHIEN_TOI_THIEU_32_KY_TU
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
-BACKUP_DIRECTORY=backups
-TLS_CERT_FILE=C:\LANAttendance\certs\server.crt
-TLS_KEY_FILE=C:\LANAttendance\certs\server.key
-```
-
-Không đóng gói database, JWT secret hoặc chứng chỉ riêng vào tệp thực thi.
-
-Server tự chạy Alembic migration khi khởi động. Sau lần chạy đầu, tạo tài khoản quản trị mà không cần cài Python:
+Lệnh được khuyến nghị trên máy chạy cả ba thành phần:
 
 ```powershell
-.\AttendanceServer.exe bootstrap-admin `
-  --username admin --employee-code AD001 `
-  --name "Quản trị" --email admin@company.local
+.\scripts\run_all.ps1
 ```
 
-Mật khẩu được nhập hai lần ở chế độ ẩn và chỉ lưu dưới dạng Argon2 hash. Sau đó chạy `AttendanceServer.exe` không có tham số để mở dịch vụ.
-
-Khi vận hành thủ công, nên mở `AttendanceServer.exe` trong cửa sổ console hiển thị
-thay vì dùng `-WindowStyle Hidden`. Cửa sổ có tiêu đề `Attendance Server - LAN`, hiển
-thị log kết nối và có thể dừng an toàn bằng `Ctrl+C`. Lệnh chạy ba thành phần kèm
-cơ chế tự dừng Server sau khi Admin và Client đã đóng được ghi trong `README.md`.
+Script chờ Server sẵn sàng rồi mở hai giao diện. Watchdog chỉ theo dõi đúng các cây tiến trình
+vừa tạo và dừng Admin/User khi cửa sổ Server đóng, kể cả lúc chưa đăng nhập. Muốn chạy từng
+thành phần để gỡ lỗi, dùng `server_launcher.py`, `admin_launcher.py` và `client_launcher.py`.
 
 ## 3. HTTPS nội bộ
 
@@ -84,7 +45,7 @@ Script chỉ tạo rule TCP/8000 và UDP/37020 cho `Domain,Private`, giới hạ
 ## 5. Chạy Client
 
 - Sao chép `client\config.example.json` thành `config.json`, đặt `server_url`, rồi chạy Client từ mã nguồn.
-- Với bản đóng gói, đặt `config.json` cạnh ứng dụng theo hướng dẫn phát hành hoặc dùng nút **Tìm Server** qua UDP discovery.
+- Có thể dùng nút **Tìm Server** qua UDP discovery nếu chưa biết địa chỉ máy Server.
 - Mọi Client gọi Server; không Client nào mở `attendance.db`.
 
 ## 6. Sao lưu và khôi phục

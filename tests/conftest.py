@@ -2,13 +2,17 @@ import os
 import sys
 from datetime import date, time
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
-os.environ["DATABASE_URL"] = "sqlite:///./test_suite.db"
+TEST_RUNTIME = ROOT / ".test-runtime"
+TEST_RUNTIME.mkdir(exist_ok=True)
+TEST_DATABASE = TEST_RUNTIME / f"test-suite-{os.getpid()}-{uuid4().hex}.db"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DATABASE.as_posix()}"
 os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET"] = "test-secret-key-with-at-least-32-characters"
 os.environ["BACKUP_DIRECTORY"] = "test_backups"
@@ -28,6 +32,15 @@ from app.models.entities import (  # noqa: E402
     ShiftAssignment,
     User,
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_database_file():
+    """Give every pytest process its own SQLite file and remove it on exit."""
+    yield
+    engine.dispose()
+    for suffix in ("", "-shm", "-wal"):
+        TEST_DATABASE.with_name(TEST_DATABASE.name + suffix).unlink(missing_ok=True)
 
 
 @pytest.fixture(autouse=True)

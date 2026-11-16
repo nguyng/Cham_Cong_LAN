@@ -215,6 +215,10 @@ class ApiClient:
         self.employee_id = None
         self.device_registration_pending = False
 
+    def close(self):
+        """Release pooled HTTP connections when the desktop process exits."""
+        self._client.close()
+
     def login(self, username: str, password: str, register_device: bool = True):
         self.clear_session()
         data = self.request(

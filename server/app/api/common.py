@@ -5,14 +5,17 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.entities import (
     AttendanceRecord,
+    AttendanceStatus,
     AuditLog,
     Employee,
     Role,
     RoleName,
     User,
 )
+from app.services.attendance import shift_window
 
 
 def now_utc() -> datetime:
@@ -50,12 +53,21 @@ def employee_dict(item: Employee) -> dict:
 
 
 def attendance_dict(item: AttendanceRecord) -> dict:
+    settings = get_settings()
+    shift_start_at, shift_end_at = shift_window(item.work_date, item.shift)
     return {
         "id": item.id,
         "employee_id": item.employee_id,
         "employee_code": item.employee.employee_code if item.employee else None,
         "full_name": item.employee.full_name if item.employee else None,
         "shift_id": item.shift_id,
+        "shift_code": item.shift.code,
+        "shift_name": item.shift.name,
+        "shift_start_time": item.shift.start_time.strftime("%H:%M"),
+        "shift_end_time": item.shift.end_time.strftime("%H:%M"),
+        "shift_start_at": shift_start_at,
+        "shift_end_at": shift_end_at,
+        "work_timezone": settings.work_timezone,
         "work_date": item.work_date,
         "check_in_at": item.check_in_at,
         "check_in_ip": item.check_in_ip,
@@ -80,6 +92,7 @@ def attendance_dict(item: AttendanceRecord) -> dict:
         "check_out_accuracy_meters": item.check_out_accuracy_meters,
         "check_out_geofence_distance_meters": item.check_out_geofence_distance_meters,
         "status": item.status.value,
+        "is_late": item.status in {AttendanceStatus.LATE, AttendanceStatus.LATE_AND_EARLY},
         "late_minutes": item.late_minutes,
         "early_leave_minutes": item.early_leave_minutes,
         "worked_minutes": item.worked_minutes,

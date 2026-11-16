@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     random_check_interval_minutes: int = Field(default=120, ge=1, le=10_080)
     random_check_response_seconds: int = Field(default=180, ge=10, le=86_400)
     work_timezone: str = "Asia/Ho_Chi_Minh"
+    late_threshold_minutes: int = Field(default=15, ge=1, le=120)
     cleanup_interval_hours: int = Field(default=6, ge=1, le=168)
     idempotency_retention_hours: int = Field(default=24, ge=1, le=8_760)
     login_session_retention_days: int = Field(default=7, ge=1, le=3_650)
@@ -70,6 +71,14 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             path = _environment_file().parent / path
         return f"sqlite:///{path.resolve().as_posix()}"
+
+    @field_validator("backup_directory")
+    @classmethod
+    def absolute_backup_directory(cls, value: str):
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = _environment_file().parent / path
+        return str(path.resolve())
 
     @field_validator("jwt_secret")
     @classmethod

@@ -238,7 +238,7 @@ def dashboard(db: Db, user: CurrentUser, mine: bool = False):
     today = attendance.local_date(now_utc())
     attendance_scope = select(AttendanceRecord.id).join(Employee)
     leave_scope = select(LeaveRequest.id).join(Employee)
-    alert_scope = select(SecurityAlert.id).join(Employee)
+    alert_scope = select(SecurityAlert.id)
     employee_scope = select(Employee.id).where(Employee.active.is_(True))
     if mine or user.role.name == RoleName.EMPLOYEE:
         employee_id = ensure_employee(user).id
@@ -250,7 +250,7 @@ def dashboard(db: Db, user: CurrentUser, mine: bool = False):
         department_id = ensure_employee(user).department_id
         attendance_scope = attendance_scope.where(Employee.department_id == department_id)
         leave_scope = leave_scope.where(Employee.department_id == department_id)
-        alert_scope = alert_scope.where(Employee.department_id == department_id)
+        alert_scope = alert_scope.join(Employee).where(Employee.department_id == department_id)
         employee_scope = employee_scope.where(Employee.department_id == department_id)
     present = db.scalar(
         select(func.count()).select_from(

@@ -2,12 +2,45 @@ from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+from app.api.common import attendance_dict
+from app.core.config import get_settings
 from app.database.session import SessionLocal
 from app.models.entities import AttendanceStatus, Employee, Shift, ShiftAssignment
 from app.services.attendance import check_in, check_out
 from fastapi import HTTPException
 
 LOCAL_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def assign_test_shift(
+    *,
+    work_date: date,
+    code: str = "POLICY",
+    start: time = time(8, 0),
+    end: time = time(17, 0),
+    break_minutes: int = 0,
+    late_grace_minutes: int = 0,
+) -> None:
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        shift = Shift(
+            code=code,
+            name="Ca kiểm thử chính sách",
+            start_time=start,
+            end_time=end,
+            break_minutes=break_minutes,
+            # Legacy shift values must not make the common 15-minute policy vary.
+            late_grace_minutes=late_grace_minutes,
+        )
+        db.add(shift)
+        db.flush()
+        db.add(
+            ShiftAssignment(
+                employee_id=employee.id,
+                shift_id=shift.id,
+                work_date=work_date,
+            )
+        )
 
 
 def test_check_in_out_and_idempotency(client, employee_headers, approved_employee_device):
@@ -124,6 +157,116 @@ def test_attendance_can_disable_lan_ip_fallback(
     assert "IP nội bộ đang bị tắt" in response.json()["detail"]
 
 
+def test_common_work_timezone_is_utc_plus_7():
+    settings = get_settings()
+
+    assert settings.work_timezone == "Asia/Ho_Chi_Minh"
+    local_time = datetime(2026, 11, 13, 8, tzinfo=ZoneInfo(settings.work_timezone))
+    assert local_time.utcoffset() == timedelta(hours=7)
+
+
+@pytest.mark.parametrize(
+    (
+        "delay_minutes",
+        "legacy_grace_minutes",
+        "expected_late_minutes",
+        "expected_status",
+    ),
+    [
+        (14, 5, 0, AttendanceStatus.OPEN),
+        (15, 10, 15, AttendanceStatus.LATE),
+        (16, 15, 16, AttendanceStatus.LATE),
+    ],
+)
+def test_common_late_threshold_boundary(
+    delay_minutes: int,
+    legacy_grace_minutes: int,
+    expected_late_minutes: int,
+    expected_status: AttendanceStatus,
+):
+    work_date = date(2029, 1, 8)
+    assign_test_shift(
+        work_date=work_date,
+        late_grace_minutes=legacy_grace_minutes,
+    )
+    local_check_in = datetime.combine(
+        work_date,
+        time(8, delay_minutes),
+        tzinfo=LOCAL_TIMEZONE,
+    )
+
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        record = check_in(
+            db,
+            employee,
+            "192.168.1.20",
+            None,
+            local_check_in.astimezone(UTC),
+        )
+
+        assert record.check_in_at == local_check_in.astimezone(UTC)
+        assert record.late_minutes == expected_late_minutes
+        assert record.status == expected_status
+
+
+def test_early_check_in_keeps_actual_time_and_is_not_late():
+    work_date = date(2029, 1, 9)
+    assign_test_shift(work_date=work_date)
+    local_check_in = datetime(2029, 1, 9, 7, 45, tzinfo=LOCAL_TIMEZONE)
+
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        record = check_in(
+            db,
+            employee,
+            "192.168.1.20",
+            None,
+            local_check_in.astimezone(UTC),
+        )
+
+        assert record.check_in_at == local_check_in.astimezone(UTC)
+        assert record.late_minutes == 0
+        assert record.status == AttendanceStatus.OPEN
+
+
+def test_checkout_calculates_worked_minutes_and_admin_api_has_shift_details(
+    client, admin_headers
+):
+    work_date = date(2029, 1, 10)
+    assign_test_shift(work_date=work_date, break_minutes=60)
+    check_in_at = datetime(2029, 1, 10, 8, 15, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
+    check_out_at = datetime(2029, 1, 10, 17, 0, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
+
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        record = check_in(db, employee, "192.168.1.20", None, check_in_at)
+        record = check_out(db, employee, "192.168.1.20", check_out_at)
+        attendance_id = record.id
+
+        assert record.worked_minutes == 465
+        assert record.late_minutes == 15
+        assert record.status == AttendanceStatus.LATE
+        serialized = attendance_dict(record)
+        assert serialized["shift_start_time"] == "08:00"
+        assert serialized["shift_end_time"] == "17:00"
+        assert serialized["shift_start_at"] == datetime(
+            2029, 1, 10, 1, 0, tzinfo=UTC
+        )
+        assert serialized["is_late"] is True
+        assert serialized["work_timezone"] == "Asia/Ho_Chi_Minh"
+
+    response = client.get("/api/v1/attendance", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    row = next(item for item in response.json() if item["id"] == attendance_id)
+    assert row["check_in_at"] is not None
+    assert row["check_out_at"] is not None
+    assert row["shift_start_time"] == "08:00"
+    assert row["worked_minutes"] == 465
+    assert row["late_minutes"] == 15
+    assert row["is_late"] is True
+
+
 def test_overnight_shift_late_early_calculation():
     with SessionLocal.begin() as db:
         employee = db.query(Employee).filter_by(employee_code="NV001").one()
@@ -142,12 +285,13 @@ def test_overnight_shift_late_early_calculation():
         db.add(ShiftAssignment(employee_id=employee.id, shift_id=shift.id, work_date=work_date))
     with SessionLocal.begin() as db:
         employee = db.query(Employee).filter_by(employee_code="NV001").one()
-        check_in_at = datetime(2026, 10, 28, 22, 10, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
+        check_in_at = datetime(2026, 10, 28, 22, 15, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
         record = check_in(db, employee, "192.168.1.20", None, check_in_at)
-        assert record.late_minutes == 10
+        assert record.late_minutes == 15
         check_out_at = datetime(2026, 10, 29, 5, 50, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
         record = check_out(db, employee, "192.168.1.20", check_out_at)
         assert record.early_leave_minutes == 10
+        assert record.worked_minutes == 425
         assert record.status == AttendanceStatus.LATE_AND_EARLY
 
 

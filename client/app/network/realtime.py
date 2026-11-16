@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import websockets
 from PySide6.QtCore import QThread, Signal
@@ -52,10 +53,15 @@ class RealtimeThread(QThread):
                     self.connection_changed.emit(True)
                     delay = 1
                     async for payload in socket:
-                        import json
-
                         if isinstance(payload, str) and payload.startswith("{"):
-                            self.message.emit(json.loads(payload))
+                            try:
+                                message = json.loads(payload)
+                            except (TypeError, ValueError):
+                                # A malformed notification must not tear down an
+                                # otherwise healthy WebSocket connection.
+                                continue
+                            if isinstance(message, dict):
+                                self.message.emit(message)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

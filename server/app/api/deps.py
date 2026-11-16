@@ -25,7 +25,10 @@ def client_ip(request: Request) -> str:
 
 
 def require_lan(ip: str):
-    address = ipaddress.ip_address(ip)
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(403, "Địa chỉ IP của máy trạm không hợp lệ") from None
     if not any(
         address in ipaddress.ip_network(network) for network in get_settings().allowed_networks
     ):

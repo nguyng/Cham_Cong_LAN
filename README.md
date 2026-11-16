@@ -6,57 +6,24 @@ Server; Client không truy cập trực tiếp database.
 
 ## Chạy nhanh từ mã nguồn
 
-Mở PowerShell tại thư mục `Cham_Cong_LAN`. Nếu đây là lần chạy đầu tiên, cài môi trường bằng:
+Mở PowerShell tại đúng thư mục `Cham_Cong_LAN`. Lần đầu tiên, chạy:
 
 ```powershell
 .\scripts\setup.ps1
 ```
 
-Sau đó dán nguyên khối lệnh dưới đây để mở ba cửa sổ terminal riêng cho Server, Admin và User:
+`setup.ps1` tạo `.venv`, sinh `server/.env` với JWT secret ngẫu nhiên và chỉ nạp năm
+tài khoản mẫu khi database chưa có tài khoản. Script không ghi đè database đang sử dụng.
+
+Mỗi lần sử dụng, chỉ cần một lệnh để mở ba cửa sổ terminal riêng cho Server, Admin và User:
 
 ```powershell
-if (-not (Test-Path '.\.venv\Scripts\python.exe') -or -not (Test-Path '.\server\.env')) {
-    .\scripts\setup.ps1
-}
-
-$root = (Resolve-Path '.').Path
-$python = (Resolve-Path '.\.venv\Scripts\python.exe').Path
-$safeRoot = $root.Replace("'", "''")
-$safePython = $python.Replace("'", "''")
-
-$serverCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' server_launcher.py"
-$server = Start-Process powershell.exe -PassThru -ArgumentList @('-NoProfile', '-Command', $serverCommand)
-
-$ready = $false
-for ($attempt = 1; $attempt -le 30; $attempt++) {
-    if ($server.HasExited) { throw 'Server đã dừng trước khi khởi động xong. Hãy xem lỗi trong cửa sổ Server.' }
-    try {
-        Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 1 | Out-Null
-        $ready = $true
-        break
-    } catch {
-        Start-Sleep -Milliseconds 500
-        $server.Refresh()
-    }
-}
-if (-not $ready) { throw 'Server không sẵn sàng sau 15 giây. Hãy xem lỗi trong cửa sổ Server.' }
-
-$adminCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' admin_launcher.py"
-$userCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' client_launcher.py"
-Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $adminCommand)
-Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $userCommand)
+.\scripts\run_all.ps1
 ```
 
-Không dùng `python -m app.main` trong PowerShell con. `client_launcher.py` tự thiết lập đúng đường dẫn module và luôn mở cổng đăng nhập User; `admin_launcher.py` mở cổng Admin/Manager.
-
-Dừng khẩn cấp các tiến trình Python của riêng dự án khi cần:
-
-```powershell
-Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -in @('python.exe', 'pythonw.exe') -and
-    $_.CommandLine -match 'server_launcher|admin_launcher|client_launcher'
-} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-```
+`run_all.ps1` dùng đúng các entry point nguồn, chờ Server mở cổng rồi mới mở giao diện.
+Một watchdog ẩn theo dõi đúng ba cây tiến trình vừa tạo; khi cửa sổ Server đóng, Admin và
+User cũng được dừng hẳn, kể cả khi đang ở màn hình đăng nhập.
 
 ## Tài khoản mẫu
 
@@ -78,13 +45,16 @@ Get-CimInstance Win32_Process | Where-Object {
 Lần đầu nhân viên đăng nhập trên một máy, thiết bị sẽ ở trạng thái
 chờ duyệt và chưa thể chấm công.
 
-1. Mở `AttendanceAdmin.exe` và đăng nhập Admin hoặc Manager.
+1. Mở cửa sổ Admin và đăng nhập Admin hoặc Manager.
 2. Chọn chức năng riêng **Phê duyệt thiết bị** trên thanh điều hướng.
 3. Chọn đúng nhân viên/tên máy, sau đó nhấn **Phê duyệt**.
 4. Quay lại Client và chấm công lại.
 
 ## Chức năng chính
 
+- Toàn bộ nghiệp vụ và hiển thị thời gian dùng UTC+7 (`Asia/Ho_Chi_Minh`). Check-in
+  muộn từ phút 15 sẽ cảnh báo; check-in sớm vẫn giữ thời gian thực tế và checkout
+  hiển thị tổng phút làm sau khi trừ giờ nghỉ.
 - Check-in/check-out theo thời gian Server, thiết bị đã phê duyệt, geofencing và tọa độ GPS từ Windows; máy
   không có cảm biến GPS có thể dùng địa chỉ IP LAN nội bộ khi cờ dự phòng được bật.
 - Admin/Manager xem riêng vĩ độ, kinh độ và sai số GPS lúc vào/ra trong **Quản lý chấm công**;
@@ -92,13 +62,14 @@ chờ duyệt và chưa thể chấm công.
 - Lịch làm việc, lịch sử chấm công và yêu cầu điều chỉnh.
 - Nghỉ phép, quỹ phép, phân ca và duyệt yêu cầu; nhân viên có nút **Hủy đơn** đối với đơn đang chờ
   hoặc đơn đã duyệt nhưng chưa bắt đầu.
-- Random Check, cảnh báo và thông báo WebSocket.
+- Nút **Gửi Random Check** nằm riêng trong **Xác minh ngẫu nhiên**, cho phép chọn
+  nhân viên đang hoạt động; cảnh báo và thông báo được cập nhật qua WebSocket.
 - Cảnh báo lỗi rõ ràng cho lỗi nhập liệu, phân quyền, mạng LAN, timeout, cấu hình và lỗi Server.
 - Một nút Làm mới để đặt lại bộ lọc, phân trang và tải lại dữ liệu; hỗ trợ xuất Excel có
   tiêu đề, màu sắc, bộ lọc, dòng xen kẽ và định dạng in đẹp; dòng đang chọn được làm nổi bật.
-- Design system nhất quán: font Segoe UI dễ đọc, icon native rõ nét trên mọi nút, thanh công cụ
-  cuộn ngang khi thiếu chỗ, bảng tự căn cột/hàng và giữ nguyên nội dung đầy đủ trong tooltip;
-  Indigo cho nhân viên, Teal cho quản trị, thẻ bo góc và hiệu ứng chuyển trang nhẹ.
+- Design system nhất quán: font Segoe UI dễ đọc, icon native rõ nét, nút/thẻ 3D
+  có gradient, viền nổi, bóng đổ và hiệu ứng nhấn; bảng có màu xen kẽ và dòng chọn nổi bật.
+  Thanh công cụ cuộn khi thiếu chỗ; cả chế độ sáng/tối đều giữ đúng tương phản màu.
 - Quản lý nhân viên, phòng ban, chức vụ, ca làm và tài khoản.
 - Bảng lương tháng/năm cho Admin và Manager: tổng thực nhận, lương theo ngày công,
   thưởng chuyên cần, duyệt và tính tiền làm thêm giờ, biểu đồ màu, bảng chi tiết và xuất Excel. Manager chỉ xem/cập nhật
@@ -153,30 +124,25 @@ Yêu cầu Windows 10/11 và Python 3.12.
 
 ```powershell
 .\scripts\setup.ps1
-.\scripts\run_server.ps1
+.\scripts\run_all.ps1
 ```
 
 `setup.ps1` tự tạo `server/.env` cùng JWT secret ngẫu nhiên ở lần chạy đầu và không ghi đè
-cấu hình hiện có. Không chép nguyên giá trị `CHANGE_...` trong file mẫu vào môi trường chạy.
+cấu hình hoặc database đã có dữ liệu. Không chép nguyên giá trị `CHANGE_...` trong file mẫu
+vào môi trường chạy.
 
-Mở Client trong PowerShell khác:
-
-```powershell
-$env:PYTHONPATH = "$PWD\client"
-.\.venv\Scripts\python.exe -m app.main
-```
-
-Mở Admin:
+Nếu muốn chạy riêng từng thành phần để gỡ lỗi, mở ba PowerShell và dùng lần lượt:
 
 ```powershell
-.\.venv\Scripts\python.exe .\admin\main.py
+.\.venv\Scripts\python.exe .\server_launcher.py
+.\.venv\Scripts\python.exe .\admin_launcher.py
+.\.venv\Scripts\python.exe .\client_launcher.py
 ```
 
 API mặc định: `http://127.0.0.1:8000`; OpenAPI: `http://127.0.0.1:8000/docs`.
 
-Khi chạy cả ba luồng trên cùng một máy, Client và Admin sẽ tự thoát sau vài giây nếu cửa sổ
-Server đã đóng. Cơ chế này chỉ áp dụng khi `server_url` trỏ về localhost, tên máy hoặc một IP LAN
-của chính máy đang chạy; Client trên máy khác vẫn giữ mở khi kết nối LAN bị gián đoạn.
+Khi chạy bằng `run_all.ps1`, đóng cửa sổ Server sẽ dừng cả Admin và User qua watchdog.
+Client trên máy khác vẫn giữ mở khi kết nối LAN bị gián đoạn.
 
 ## Chạy trong mạng LAN
 
@@ -194,19 +160,15 @@ của chính máy đang chạy; Client trên máy khác vẫn giữ mở khi k�
 }
 ```
 
-Khi sao chép bản portable sang máy khác, phải sao chép cả thư mục, không
-chỉ sao chép file `.exe`.
-
-## Kiểm thử và đóng gói
+## Kiểm thử
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check server client admin scripts tests
 $env:QT_QPA_PLATFORM = "offscreen"
 .\.venv\Scripts\python.exe -m pytest -p no:cacheprovider -q
-.\scripts\build_portable.ps1
 ```
 
-Trạng thái hiện tại: **101 kiểm thử đạt**, Ruff không phát hiện lỗi.
+Trạng thái hiện tại: **126 kiểm thử đạt**, Ruff không phát hiện lỗi.
 
 ## Thư mục quan trọng
 
@@ -216,7 +178,6 @@ client/          Giao diện Client/Admin
 scripts/         Cài đặt, chạy, seed và build
 tests/           Kiểm thử tự động
 docs/            Tài liệu chi tiết
-dist_portable/   Ba gói portable, không commit lên Git
 ```
 
 Các tệp lớn đã được tách theo trách nhiệm để dễ bảo trì và trình bày đồ án:
@@ -230,7 +191,6 @@ Các tệp lớn đã được tách theo trách nhiệm để dễ bảo trì v
 - `client/app/ui/attendance_portal.py`, `leave_portal.py`, `payroll_ui.py`: nghiệp vụ giao diện
   chấm công, nghỉ phép và bảng lương.
 
-Không commit `server/.env`, `client/config.json`, database SQLite hoặc bản sao
-lưu. Không xóa `dist_portable/AttendanceServer/data` nếu còn dữ liệu cần giữ.
+Không commit hoặc xóa nhầm `server/.env`, `client/config.json`, database SQLite hay bản sao lưu.
 
 Tài liệu triển khai chi tiết: [docs/DEPLOYMENT_WINDOWS_LAN.md](docs/DEPLOYMENT_WINDOWS_LAN.md).
