@@ -1,6 +1,6 @@
-# Bảng đối chiếu triển khai
+# Bảng đối chiếu triển khai — Hawa's Food Đà Nẵng
 
-Nguồn: `README.md`, `phan_tich_du_an_cham_cong.md`, `Module_ChamCong_LAN.md`, `Module_ChamCong_LAN_content.txt` và yêu cầu Codex đính kèm. Trạng thái chỉ chuyển sang **Done** sau khi có mã thực thi và kiểm thử phù hợp.
+Nguồn chuẩn hóa: `BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx`, `phan_tich_du_an_cham_cong.md`, `Module_ChamCong_LAN.md` (5 phân hệ MOD-01 đến MOD-05, FR-01 đến FR-20, NFR-01 đến NFR-08, BR-01 đến BR-06). Trạng thái chuyển sang **Implemented/Done** sau khi có mã thực thi và kiểm thử phù hợp.
 
 | ID | Chức năng | Nguồn yêu cầu | Module | Trạng thái | Kiểm thử |
 |---|---|---|---|---|---|

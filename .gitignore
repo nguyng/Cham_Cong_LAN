@@ -73,3 +73,7 @@ build/
 !packaging/*.spec
 test_backups/
 .test-runtime/
+
+# Word temporary lock files
+~$*.docx
+* (1).docx

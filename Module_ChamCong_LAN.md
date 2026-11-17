@@ -1,230 +1,226 @@
-# PHẦN MỀM CHẤM CÔNG TRÊN MẠNG LAN
-## Mô Tả Các Module Chức Năng
+# HỆ THỐNG QUẢN LÝ VÀ CHẤM CÔNG TRỰC TUYẾN ĐỊNH VỊ GEOFENCING THỜI GIAN THỰC
+## MÔ TẢ CÁC PHÂN HỆ VÀ MODULE CHỨC NĂNG (HAWA'S FOOD ĐÀ NẴNG)
 
-> **Môn học**: Lập Trình Mạng
-> **Kiến trúc**: Microservices — Spring Boot (Java) + Python FastAPI + React
-> **Môi trường**: Mạng nội bộ LAN (không cần Internet)
-
-| Ký hiệu | Ý nghĩa |
-|---------|---------|
-| ☕ `[Java]` | Tính năng do **Spring Boot** thực thi — Member 1 hoặc 3 phụ trách |
-| 🐍 `[Python]` | Tính năng do **Python FastAPI** thực thi — Member 2 phụ trách |
-| ⚛️ `[React]` | Tính năng do **React** thực thi — Member 4 hoặc 5 phụ trách |
+> **Học phần**: Mạng máy tính / Lập trình mạng  
+> **Đơn vị đào tạo**: Khoa Công Nghệ Thông Tin — Trường Đại học Kiến Trúc Đà Nẵng  
+> **Người hướng dẫn khoa học**: TS. Đặng Hùng Vĩ  
+> **Đơn vị ứng dụng thực tế**: Quán Hawa's Food Đà Nẵng (Chuỗi F&B ẩm thực nhanh và giải khát)  
+> **Tên nhóm thực hiện**: Huan rose và dong bon — **Lớp**: 23CT1 — **Khóa**: 2023  
+> **Kiến trúc mạng**: Client – Server tập trung (Web Mobile / Desktop App + RESTful API HTTPS + Live WebSocket + UDP Discovery)
 
 ---
 
-## Module 1: Chấm Công (Attendance)
+## 👥 Danh Sách Thành Viên & Phân Công Trách Nhiệm Phân Hệ
 
-> 🐍 **Thực thi bởi**: Python FastAPI (Member 2)
-
-Trung tâm của hệ thống — ghi nhận toàn bộ hoạt động vào/ra của nhân viên theo thời gian thực.
-
-### 1.1. Chấm Công Vào / Ra 🐍
-1.1.1. Nhân viên đăng nhập và bấm nút "Chấm Công Vào" — Python API ghi nhận giờ vào, địa chỉ IP máy tính, lưu vào bảng attendance_logs.
-1.1.2. Cuối ca, nhân viên bấm "Chấm Công Ra" — Python API tính tổng số giờ làm trong ngày và cập nhật bản ghi.
-1.1.3. Tự động ghi nhận trạng thái: Đúng giờ / Đi muộn / Về sớm bằng cách so sánh giờ chấm công với ca làm việc lấy từ MySQL.
-
-### 1.2. Giới Hạn IP Chấm Công 🐍 (Điểm khác biệt)
-1.2.1. Python kiểm tra IP của request: chỉ chấp nhận IP nằm trong dải 192.168.x.x (nội bộ công ty).
-1.2.2. Nếu IP bên ngoài → API trả về lỗi 403, ghi log cảnh báo vào hệ thống.
-1.2.3. Admin có thể cấu hình whitelist IP qua trang Admin (gọi API Spring Boot để lưu cấu hình).
-
-### 1.3. Random Check — Xác Nhận Hiện Diện Ngẫu Nhiên 🐍 (Điểm khác biệt của app)
-1.3.1. Python dùng APScheduler lập lịch gửi thông báo bất ngờ đến màn hình nhân viên trong khung giờ làm việc (qua WebSocket).
-1.3.2. React hiển thị popup đếm ngược — nhân viên phải bấm "Xác nhận tôi đang làm việc" trong vòng X phút.
-1.3.3. Nếu không phản hồi → Python tự động cảnh báo Manager qua WebSocket, ghi nhận vào lịch sử.
-1.3.4. Lịch sử các lần Random Check (thời gian, có phản hồi hay không) được lưu lại để Manager xem xét.
-
-### 1.4. Phát Hiện & Gắn Cờ Bất Thường 🐍 (Điểm khác biệt)
-1.4.1. Python tự động gắn cờ ⚠️ các ca chấm công đáng ngờ: vào/ra cách nhau dưới 10 phút, chấm công ngoài giờ quy định.
-1.4.2. Danh sách ca bất thường hiển thị trên Dashboard Manager để kiểm tra cuối ngày/tuần.
+| STT | Họ và tên | MSSV | Vai trò đồ án | Phân hệ phụ trách chính | Tác nhân liên đới |
+|:---:|---|:---:|---|---|---|
+| 1 | **Ngô Đức An** | 114534 | Trưởng nhóm | **MOD-01: Quản trị & Bảo mật hệ thống** | System Admin |
+| 2 | **Nguyễn Văn Nguyên** | 115201 | Thành viên | **MOD-02: Cấu hình Quán & Geofencing** | Shop Owner (Chủ quán) |
+| 3 | **Trần Đức Trí** | 114889 | Thành viên | **MOD-03: Quản lý Ca làm & Lập lịch phân ca** | Shift Manager (Quản lý ca) |
+| 4 | **Vũ Huy Hoàng** | 114776 | Thành viên | **MOD-04: Điểm danh Geofencing & Live WebSocket** | Employee (Nhân viên) |
+| 5 | **Nguyễn Ngọc Thương** | 115042 | Thành viên | **MOD-05: Giải trình sai lệch & Khóa sổ công Excel** | Accountant / Timekeeper (Kế toán) |
 
 ---
 
-## Module 2: Quản Lý Nhân Sự (Human Resource Management)
+## 🏗️ Tổng Quan 5 Phân Hệ Nghiệp Vụ Cốt Lõi (MOD-01 đến MOD-05)
 
-> ☕ **Thực thi bởi**: Spring Boot (Member 1)
-
-Tổ chức cơ cấu nhân sự, phân công công việc và quản lý thông tin nhân viên.
-
-### 2.1. Đăng Nhập & Phân Quyền ☕
-2.1.1. Spring Boot xử lý đăng nhập, tạo JWT Token có chứa thông tin vai trò (role).
-2.1.2. 3 cấp quyền: Employee → Manager → Admin. Mỗi cấp chỉ thấy và dùng được chức năng của mình.
-2.1.3. JWT Token được React lưu vào localStorage và gửi kèm trong mọi request đến cả Spring Boot lẫn Python FastAPI.
-
-### 2.2. Quản Lý Nhân Viên ☕
-2.2.1. Thêm / Sửa / Xóa thông tin nhân viên (Họ tên, Mã NV, Email, Số điện thoại, Phòng ban, Vai trò).
-2.2.2. Tìm kiếm và lọc nhân viên theo phòng ban, ca làm việc, trạng thái (đang làm / đã nghỉ).
-2.2.3. Mỗi nhân viên mới được tự động tạo tài khoản đăng nhập với mật khẩu mặc định.
-
-### 2.3. Quản Lý Phòng Ban ☕
-2.3.1. Tạo / Sửa / Xóa các phòng ban trong công ty.
-2.3.2. Gán nhân viên vào phòng ban, gán Manager phụ trách từng phòng.
-2.3.3. Xem danh sách nhân viên theo từng phòng ban, kèm trạng thái có mặt hôm nay.
-
-### 2.4. Quản Lý Ca Làm Việc ☕
-2.4.1. Tạo các ca làm việc: Ca sáng, Ca chiều, Ca tối, Ca hành chính... với giờ bắt đầu/kết thúc cụ thể.
-2.4.2. Phân ca cho từng nhân viên theo tuần hoặc theo tháng.
-2.4.3. Xem lịch phân ca dưới dạng bảng (theo tuần/tháng). Python sẽ đọc bảng này để tính đúng giờ / muộn.
+```text
+               ┌─────────────────────────────────────────────────────────┐
+               │    HỆ THỐNG QUẢN LÝ & CHẤM CÔNG QUÁN HAWA'S FOOD        │
+               └───────────────────────────┬─────────────────────────────┘
+                                           │
+         ┌───────────────────┬─────────────┴───────┬───────────────────┬───────────────────┐
+         ▼                   ▼                     ▼                   ▼                   ▼
+     ┌─────────┐         ┌─────────┐           ┌─────────┐         ┌─────────┐         ┌─────────┐
+     │ MOD-01  │         │ MOD-02  │           │ MOD-03  │         │ MOD-04  │         │ MOD-05  │
+     │Quản trị │         │Cấu hình │           │Quản lý  │         │Điểm danh│         │Giải     │
+     │& Bảo mật│         │Quán &   │           │Ca làm & │         │Geofence │         │trình &  │
+     │hệ thống │         │Geofence │           │Phân ca  │         │WebSocket│         │Khóa sổ  │
+     └─────────┘         └─────────┘           └─────────┘         └─────────┘         └─────────┘
+```
 
 ---
 
-## Module 3: Quản Lý Nghỉ Phép (Leave Management)
+## 1. PHÂN HỆ MOD-01: QUẢN TRỊ & BẢO MẬT HỆ THỐNG
+> 👤 **Người phụ trách**: Ngô Đức An (Trưởng nhóm — MSSV: 114534)  
+> 🎯 **Mục tiêu**: Đảm bảo an toàn mạng, xác thực định danh và phân quyền truy cập RBAC.
 
-> ☕ **Thực thi bởi**: Spring Boot (Member 3) — Tự động hóa luồng: Xin phép → Duyệt → Cập nhật chuyên cần.
+### 1.1. Module MOD-01-01: Đăng nhập an toàn & Xác thực phiên qua JWT
+- **Input**: `username`, `password` (tối thiểu 6 ký tự), IP kết nối.
+- **Xử lý**:
+  1. Kiểm tra tài khoản trong bảng `users`, xác thực trạng thái `is_active = TRUE`.
+  2. Đối chiếu mật khẩu bằng thuật toán băm an toàn (`Argon2` / `bcrypt`). Khóa tài khoản sau 5 lần nhập sai liên tiếp.
+  3. Cấp phát Access Token chuẩn JSON Web Token (RFC 7519) chứa `user_id`, `role`, thời hạn hiệu lực 480 phút.
+- **Output**: Token JWT, thông tin vai trò người dùng hoặc thông báo từ chối truy cập.
 
-### 3.1. Xin Nghỉ Phép ☕ + ⚛️
-3.1.1. Nhân viên tạo đơn xin nghỉ: chọn loại nghỉ (Nghỉ phép, Nghỉ ốm, Nghỉ không lương...), ngày bắt đầu, ngày kết thúc, lý do.
-3.1.2. Spring Boot lưu đơn, gửi thông báo đến Manager phụ trách qua WebSocket của Python (real-time).
-3.1.3. React hiển thị trạng thái đơn: Chờ duyệt / Đã duyệt / Bị từ chối.
+### 1.2. Module MOD-01-02: Phân quyền vai trò người dùng (RBAC Middleware)
+- **Cơ chế**: Middleware chặn mọi request, giải mã JWT, kiểm tra quyền theo 5 vai trò:
+  - `ADMIN`: Toàn quyền hệ thống, cấu hình tham số mạng, quản trị người dùng.
+  - `OWNER` (Chủ quán): Quản lý vị trí quán, toạ độ Geofencing, danh mục ca và xem toàn bộ báo cáo.
+  - `MANAGER` (Quản lý ca): Lập lịch phân ca, giám sát Live WebSocket, duyệt giải trình trong phạm vi ca trực.
+  - `ACCOUNTANT` (Kế toán đối soát): Đối soát giờ công, phát hiện ca bất thường, khóa sổ kỳ công và xuất Excel.
+  - `EMPLOYEE` (Nhân viên): Xem lịch cá nhân, điểm danh Geofencing GPS, gửi đơn giải trình.
 
-### 3.2. Duyệt Nghỉ Phép ☕ + ⚛️
-3.2.1. Manager xem danh sách đơn nghỉ phép của phòng đang chờ duyệt trên React.
-3.2.2. Chấp thuận hoặc từ chối kèm lý do — Spring Boot xử lý, nhân viên nhận thông báo ngay lập tức qua WebSocket.
-3.2.3. Khi duyệt, Spring Boot tự động trừ số ngày phép còn lại của nhân viên đó.
+### 1.3. Module MOD-01-03: Quản lý hồ sơ tài khoản
+- Cấp phát tài khoản mới theo chuẩn mã nhân viên (`NVxxx`).
+- Đổi mật khẩu định kỳ, thu hồi token khi người dùng đổi mật khẩu hoặc đăng xuất.
 
-### 3.3. Theo Dõi Ngày Phép ☕
-3.3.1. Mỗi nhân viên xem số ngày phép còn lại trong năm qua giao diện React.
-3.3.2. Admin cấu hình số ngày phép tối đa theo chính sách công ty.
-3.3.3. Cảnh báo khi nhân viên đã dùng hết hoặc gần hết ngày phép.
-
----
-
-## Module 4: Báo Cáo & Thống Kê (Reports & Analytics)
-
-> 🐍 + ☕ **Thực thi bởi**: Python (xuất file) + Spring Boot (API tổng hợp) — Member 2 & 3 phụ trách.
-
-Tổng hợp dữ liệu chuyên cần — đầu vào để tính lương và đánh giá hiệu suất.
-
-### 4.1. Dashboard Real-time ⚛️ + 🐍
-4.1.1. React kết nối WebSocket của Python — hiển thị ai đang có mặt tại thời điểm hiện tại, cập nhật ngay khi có người chấm công.
-4.1.2. Dashboard cảnh báo: danh sách nhân viên không phản hồi Random Check trong ngày.
-4.1.3. Bộ lọc nhanh: xem theo phòng ban, theo ca làm việc.
-
-### 4.2. Báo Cáo Theo Ngày ☕
-4.2.1. Spring Boot tổng hợp: danh sách có mặt / vắng mặt / đi muộn trong ngày từ bảng attendance_logs.
-4.2.2. Xem chi tiết giờ vào/ra của từng người, trạng thái Random Check.
-4.2.3. Lọc theo phòng ban hoặc cá nhân.
-
-### 4.3. Báo Cáo Theo Tháng & Xuất File 🐍
-4.3.1. Python tổng hợp: số ngày công, số giờ làm, số lần đi muộn, số lần không phản hồi Random Check.
-4.3.2. Xuất file Excel (.xlsx) dùng thư viện openpyxl — để tính lương cuối tháng.
-4.3.3. Xuất file PDF dùng thư viện reportlab — bảng tổng hợp ngày công chính thức.
+### 1.4. Module MOD-01-04: Giám sát nhật ký an toàn mạng (Audit Trail & Logging)
+- Tự động ghi lại các sự kiện an ninh mạng vào bảng `audit_logs`: địa chỉ IP Client, URL endpoint, phương thức HTTP, mã phản hồi, dấu thời gian Server.
 
 ---
 
-## Module 5: Hệ Thống & Bảo Mật (System & Security)
+## 2. PHÂN HỆ MOD-02: CẤU HÌNH QUÁN & GEOFENCING
+> 👤 **Người phụ trách**: Nguyễn Văn Nguyên (Thành viên — MSSV: 115201)  
+> 🎯 **Mục tiêu**: Thiết lập ranh giới địa lý ảo và hạ tầng mạng điểm danh tại Quán Hawa's Food Đà Nẵng.
 
-> ☕ + 🐍 **Thực thi bởi**: Cả hai backend — Nền tảng vận hành toàn bộ hệ thống trên mạng LAN.
+### 2.1. Module MOD-02-01: Thiết lập toạ độ địa lý & Ghim bản đồ quán
+- **Input**: Tên cơ sở quán, toạ độ vĩ độ (`latitude`), kinh độ (`longitude`), bán kính Geofencing (`radius_meters` = 50m).
+- **Xử lý**: Kiểm tra tính hợp lệ toạ độ (vĩ độ thuộc [-90, 90], kinh độ thuộc [-180, 180]), lưu trữ vào bảng `shop_locations`.
+- **Output**: Bản ghi địa điểm quán chính thức, hiển thị tâm quán và vòng tròn bán kính 50m trên bản đồ trực quan.
 
-### 5.1. Bảo Mật JWT Dùng Chung ☕ + 🐍 (Quan trọng)
-5.1.1. Spring Boot tạo JWT Token khi đăng nhập, ký bằng secret key chung.
-5.1.2. Python FastAPI xác minh JWT Token từ React bằng cùng secret key đó trước khi xử lý mọi request.
-5.1.3. Token hết hạn sau thời gian quy định, React tự động redirect về trang đăng nhập.
+### 2.2. Module MOD-02-02: Đăng ký dải IP & Wi-Fi nội bộ của quán
+- Lưu danh sách mạng Wi-Fi hợp lệ của quán vào bảng `shop_wifis` (BSSID, SSID, dải subnet IP nội bộ ví dụ `192.168.1.0/24`).
+- Phục vụ cơ chế thẩm định kép (Dual Verification): kết hợp GPS với IP Wi-Fi nội bộ chống Fake GPS.
 
-### 5.2. Triển Khai Microservices Trên Mạng LAN 🐍 + ☕ (Điểm khác biệt)
-5.2.1. 1 máy chủ duy nhất chạy đồng thời: Spring Boot (cổng 8080) + Python FastAPI (cổng 8000) + MySQL.
-5.2.2. Toàn bộ nhân viên truy cập React qua IP nội bộ — không cần cài đặt gì trên máy client.
-5.2.3. Không cần Internet, không phụ thuộc dịch vụ bên ngoài — dữ liệu hoàn toàn nội bộ.
-5.2.4. File start_server.bat tự động khởi động toàn bộ hệ thống chỉ bằng 1 cú double-click.
-
-### 5.3. WebSocket Real-time 🐍
-5.3.1. Python FastAPI quản lý toàn bộ kênh WebSocket — broadcast khi có chấm công mới, khi Random Check kích hoạt, khi có đơn nghỉ phép.
-5.3.2. Dashboard Manager cập nhật tức thì, không cần F5 trang.
-5.3.3. Popup Random Check hiện trên màn hình nhân viên ngay lập tức khi Python gửi lệnh.
-
-### 5.4. Nhật Ký Hệ Thống (Audit Log) ☕
-5.4.1. Spring Boot ghi lại toàn bộ hoạt động quan trọng: đăng nhập, thay đổi nhân sự, duyệt đơn.
-5.4.2. Python ghi riêng log chấm công và Random Check.
-5.4.3. Admin xem nhật ký hợp nhất để kiểm tra bảo mật và truy vết sự cố.
+### 2.3. Module MOD-02-03: Cài đặt quy chế làm việc & Dung sai giờ giấc
+- Cấu hình thời gian cho phép điểm danh vào ca sớm tối đa 30 phút (`early_arrival_buffer_minutes = 30`).
+- Cấu hình dung sai đi muộn cho phép (ví dụ: tối đa 5 phút không bị phạt công).
 
 ---
 
-## Tóm Tắt — Ma Trận Module
+## 3. PHÂN HỆ MOD-03: QUẢN LÝ CA LÀM & LẬP LỊCH PHÂN CA
+> 👤 **Người phụ trách**: Trần Đức Trí (Thành viên — MSSV: 114889)  
+> 🎯 **Mục tiêu**: Số hóa lịch làm việc, tự động hóa phân bổ nhân lực và ngăn ngừa chồng chéo ca kíp.
 
-| Module | Công nghệ | Thành viên | Điểm độc đáo |
-|--------|-----------|-----------|-------------|
-| **Module 1** — Chấm Công | 🐍 Python FastAPI | Member 2 | 🌟 Giới hạn IP, Random Check, Gắn cờ bất thường |
-| **Module 2** — Nhân Sự | ☕ Spring Boot | Member 1 | ➖ Học từ HRM thương mại, nền tảng bảo mật tốt |
-| **Module 3** — Nghỉ Phép | ☕ Spring Boot | Member 3 | 🌟 Thông báo real-time qua WebSocket Python |
-| **Module 4** — Báo Cáo | 🐍 Python + ☕ Java | Member 2 & 3 | 🌟 Báo cáo Random Check, xuất Excel/PDF bằng Python |
-| **Module 5** — Hệ Thống | 🐍 + ☕ Cả hai | Member 1,2,3 | 🌟 Microservices LAN, JWT chung, start_server.bat |
+### 3.1. Module MOD-03-01: Quản lý danh mục ca làm việc (Shifts)
+- Định nghĩa các ca làm việc của Hawa's Food trong bảng `shifts`:
+  - **Ca Sáng (CA1)**: 06:30 – 11:30
+  - **Ca Chiều (CA2)**: 11:30 – 17:30
+  - **Ca Tối (CA3)**: 17:30 – 23:00
+  - **Ca Gãy (CAGAY)**: 10:30 – 14:30 hoặc ca cao điểm cuối tuần.
 
----
+### 3.2. Module MOD-03-02: Lập lịch phân ca tuần & Kiểm tra xung đột trùng ca
+- **Input**: `user_id`, `shift_id`, `work_date`.
+- **Xử lý**: Thuật toán quét xung đột thời gian:
+  1. Lấy khoảng thời gian [Start_new, End_new] của ca dự kiến gán.
+  2. Truy vấn tất cả ca làm việc đã có của nhân viên đó trong cùng ngày `work_date`.
+  3. Kiểm tra điều kiện giao thoa: `max(Start_new, Start_old) < min(End_new, End_old)`.
+  4. Nếu có xung đột: Server từ chối và báo lỗi *"Nhân viên đã được phân ca trùng khung giờ"*.
+  5. Nếu không trùng: Thêm bản ghi vào bảng `schedules` với trạng thái `PUBLISHED`.
+- **Output**: Lịch làm việc tuần được công bố, đồng bộ tức thời xuống giao diện của nhân viên.
 
-## 9. 🔄 Quy Trình Tin Học Hóa Nghiệp Vụ Chấm Công (As-Is vs To-Be)
-
-Quy trình này mô tả cách hệ thống phần mềm thay thế và tối ưu hóa các quy trình quản lý nhân sự — chấm công thủ công truyền thống tại doanh nghiệp.
-
----
-
-### 9.1. Quản lý Hồ sơ & Phân ca làm việc
-
-**🔴 Quy trình cũ (Thủ công):**
-Bộ phận HR dùng sổ sách hoặc file Excel rời rạc để lưu thông tin nhân viên. Trưởng phòng phải xếp lịch ca làm thủ công trên bảng trắng hoặc gửi qua Zalo/Email, dễ xảy ra nhầm lẫn, trùng ca.
-
-**🟢 Quy trình mới (Tin học hóa):**
-- Admin khai báo toàn bộ nhân viên và cơ cấu phòng ban trên Hệ thống (**Spring Boot**).
-- Manager thiết lập ca làm việc và gán ca cho nhân viên bằng vài click chuột trên giao diện Web.
-- Dữ liệu đồng bộ tức thời đến mọi nhân viên.
+### 3.3. Module MOD-03-03: Đổi ca & Bàn giao ca trực
+- Cho phép nhân viên gửi yêu cầu đổi ca giữa 2 người; Quản lý ca phê duyệt trên giao diện quản trị.
 
 ---
 
-### 9.2. Hoạt động Chấm Công Hàng Ngày
+## 4. PHÂN HỆ MOD-04: ĐIỂM DANH GEOFENCING & LIVE WEBSOCKET
+> 👤 **Người phụ trách**: Vũ Huy Hoàng (Thành viên — MSSV: 114776)  
+> 🎯 **Mục tiêu**: Tự động hóa đo khoảng cách toạ độ GPS, xác thực điểm danh an toàn và phát sự kiện thời gian thực.
 
-**🔴 Quy trình cũ (Thủ công):**
-Nhân viên phải xếp hàng quét vân tay tại máy gắn ở cửa ra vào. Thường xuyên gặp lỗi (máy không nhận vân tay, tay ướt, quên quét) và phải nhờ HR xử lý ngoại lệ.
+### 4.1. Module MOD-04-01: Thu thập toạ độ GPS an toàn từ Client
+- Client (Web Mobile / Desktop) trích xuất toạ độ người dùng qua W3C Geolocation API: toạ độ `(lat, lng)`, sai số `accuracy`.
+- Đóng gói gửi kèm Token JWT và `schedule_id` qua đường truyền mã hóa HTTPS đến Server.
 
-**🟢 Quy trình mới (Tin học hóa):**
-- Nhân viên ngồi ngay tại bàn làm việc, mở trình duyệt và click **"Chấm Công Vào/Ra"**.
-- Trạm **Python FastAPI** tự động đánh mốc thời gian thực, đối chiếu IP mạng LAN (không cho phép dùng 4G/Wifi ngoài) để xác thực vị trí.
-- Tự động phân loại: **Đúng giờ / Đi muộn / Về sớm**.
+### 4.2. Module MOD-04-02: Engine thẩm định Geofencing Haversine tại Server
+- **Công thức lượng giác hình cầu Haversine**:
+  - $\Delta\phi = \phi_2 - \phi_1$, $\Delta\lambda = \lambda_2 - \lambda_1$
+  - $a = \sin^2(\Delta\phi / 2) + \cos(\phi_1) \cdot \cos(\phi_2) \cdot \sin^2(\Delta\lambda / 2)$
+  - $c = 2 \cdot \text{atan2}(\sqrt{a}, \sqrt{1 - a})$
+  - $d = R \cdot c$ (với $R = 6.371.000\,\text{m}$)
+- **Quy tắc thẩm định**:
+  - Nếu $d \le 50\,\text{m}$: Hợp lệ $\rightarrow$ Server ghi nhận `check_in_time`, khoảng cách thực tế, đánh giá trạng thái (`ON_TIME` hoặc `LATE`).
+  - Nếu $d > 50\,\text{m}$: Không hợp lệ $\rightarrow$ Từ chối ghi nhận, trả thông báo: *"Bạn đang ở ngoài phạm vi quán (cách tâm quán thực tế, tối đa 50m)"*.
 
----
+### 4.3. Module MOD-04-03: Check-out cuối ca & Tính tổng giờ công thực tế
+- Ghi nhận thời điểm ra ca `check_out_time`, đo lại khoảng cách $d_{out} \le 50\,\text{m}$.
+- Tính toán tổng thời gian làm việc thực tế (`work_hours`), tự động phát hiện tình trạng về sớm (`EARLY_LEAVE`).
 
-### 9.3. Giám sát & Chống gian lận (Trong giờ hành chính)
-
-**🔴 Quy trình cũ (Thủ công):**
-Quản lý phải đi vòng quanh văn phòng giám sát, hoặc kiểm tra camera để xem nhân viên có mặt tại bàn hay không (tốn thời gian, không hiệu quả). Máy vân tay không thể chống được việc *"nhờ người quẹt thẻ hộ rồi đi ra ngoài"*.
-
-**🟢 Quy trình mới (Tin học hóa):**
-- Hệ thống áp dụng **AI/Engine Random Check** (Python APScheduler), thỉnh thoảng sẽ tự động bật Popup trên màn hình máy tính của nhân viên.
-- Nhân viên phải click xác nhận trong vòng X phút.
-- Nếu bỏ lỡ → hệ thống tự động ghi nhận vắng mặt và bắn thông báo **Real-time qua WebSocket** về Dashboard của Manager.
-
----
-
-### 9.4. Xử lý Đơn xin nghỉ phép
-
-**🔴 Quy trình cũ (Thủ công):**
-Nhân viên viết đơn giấy hoặc gửi email. Đơn phải qua nhiều tay (Trưởng nhóm → Trưởng phòng → HR), mất thời gian chờ đợi, dễ thất lạc đơn và khó theo dõi quỹ ngày phép còn lại.
-
-**🟢 Quy trình mới (Tin học hóa):**
-- Nhân viên điền Form xin nghỉ ngay trên Web (**React**).
-- Manager nhận được thông báo, duyệt/từ chối chỉ bằng **1 click**.
-- Hệ thống (**Java**) tự động cập nhật trạng thái và trừ dần vào quỹ ngày phép của nhân viên đó.
+### 4.4. Module MOD-04-04: Kênh truyền thông hai chiều Live WebSocket (RFC 6455)
+- Server duy trì WebSocket Pool (kênh `/api/v1/ws`).
+- Ngay khi một nhân viên Check-in hoặc Check-out thành công:
+  - Server tạo gói tin JSON chứa họ tên, mã nhân viên, ca làm, khoảng cách, trạng thái.
+  - Broadcast gói tin tức thời tới Dashboard Quản lý ca với độ trễ $< 100\,\text{ms}$.
+  - Giao diện Dashboard của Quản lý tự cập nhật danh sách có mặt mà không cần F5 / Reload trang.
 
 ---
 
-### 9.5. Tổng hợp Báo Cáo & Tính Lương Cuối Tháng
+## 5. PHÂN HỆ MOD-05: GIẢI TRÌNH SAI LỆCH & KHÓA SỔ CÔNG EXCEL
+> 👤 **Người phụ trách**: Nguyễn Ngọc Thương (Thành viên — MSSV: 115042)  
+> 🎯 **Mục tiêu**: Xử lý ngoại lệ chấm công linh hoạt, bảo đảm tính toàn vẹn dữ liệu và trích xuất báo cáo đối soát.
 
-**🔴 Quy trình cũ (Thủ công):**
-Kế toán/HR mất từ 2–3 ngày cuối tháng để trút dữ liệu từ máy vân tay ra USB, ngồi mò mẫm đối chiếu file Excel vân tay với đống giấy tờ xin nghỉ phép để chốt công. Cực kỳ dễ sai sót.
+### 5.1. Module MOD-05-01: Gửi đơn giải trình quên bấm công (Attendance Request)
+- Áp dụng khi nhân viên quên bấm giờ vào/ra hoặc máy gặp sự cố mạng:
+  - Nhân viên chọn ca làm việc, chọn loại giải trình (`MISSING_CHECK_IN`, `MISSING_CHECK_OUT`, `DEVICE_ERROR`).
+  - Nhập lý do giải trình, tải kèm ảnh chụp minh chứng (ví dụ camera tại quán).
+  - Bản ghi được tạo trong bảng `attendance_requests` với trạng thái `PENDING`.
 
-**🟢 Quy trình mới (Tin học hóa):**
-- Hệ thống tự động tích hợp dữ liệu chấm công (**Python**) và dữ liệu nghỉ phép hợp lệ (**Java**).
-- HR chỉ việc ấn nút **"Xuất báo cáo tháng"**, hệ thống sẽ xuất ra file Excel/PDF (bằng thư viện `openpyxl` / `reportlab`) hoàn chỉnh chỉ trong **3–5 giây**.
-- Dữ liệu chính xác tuyệt đối.
+### 5.2. Module MOD-05-02: Phê duyệt đơn giải trình & Cập nhật giờ công
+- Quản lý ca / Kế toán đối chiếu dữ liệu camera và sổ ca:
+  - Bấm **Chấp thuận** (`APPROVED`): Hệ thống tự động điền giờ chấm công bổ sung vào bảng `attendances`, tính lại tổng giờ công trong cùng một Database Transaction.
+  - Bấm **Từ chối** (`REJECTED`): Nhập lý do từ chối gửi lại nhân viên.
+
+### 5.3. Module MOD-05-03: Cảnh báo tự động các ca chấm công bất thường
+- Hệ thống tự động quét và gắn cờ cảnh báo `ABNORMAL` đối với:
+  - Ca làm việc có check-in nhưng không có check-out khi ca đã kết thúc quá 2 giờ.
+  - Ca có khoảng cách $d$ mấp mé ngưỡng $50\,\text{m}$ kèm toạ độ nhảy bất thường.
+  - Ca làm vào/ra cách nhau dưới 15 phút.
+
+### 5.4. Module MOD-05-04: Khóa sổ chấm công kỳ tháng (Monthly Freeze) & Xuất Excel
+- **Khóa sổ công (`is_locked = TRUE`)**:
+  - Cuối kỳ tháng (ngày chốt công), Kế toán kích hoạt chức năng Khóa sổ.
+  - Toàn bộ các bản ghi `attendances` của tháng được bật cờ `is_locked = TRUE`.
+  - Mọi thao tác thêm/sửa/xóa hoặc duyệt bù sau khi đã khóa sổ đều bị hệ thống chặn tuyệt đối nhằm bảo đảm tính toàn vẹn kiểm toán.
+- **Xuất báo cáo bảng công Excel (.xlsx)**:
+  - Sử dụng thư viện xử lý bảng tính chuẩn để sinh file Excel báo cáo:
+    - Tiêu đề: *BẢNG TỔNG HỢP CÔNG THÁNG — QUÁN HAWA'S FOOD ĐÀ NẴNG*.
+    - Bảng chi tiết: Họ tên, Mã NV, Tổng ca phân bổ, Ca đúng giờ, Số lần đi muộn, Về sớm, Số ca giải trình được duyệt, Tổng số giờ công thực nhận.
+    - Định dạng trực quan: màu sắc nổi bật các ca trễ, tự động căn lề in chuẩn khổ giấy A4 ngang.
 
 ---
 
-## 💡 Bảng So Sánh Tóm Tắt (Dùng cho Slide thuyết trình)
+## 📋 Bảng Quy Tắc Nghiệp Vụ Cốt Lõi (Business Rules - BR)
 
-> Tóm tắt phần quy trình tin học hóa thành bảng so sánh ngắn gọn để đưa vào slide thuyết trình:
+| Mã BR | Tên quy tắc nghiệp vụ | Định nghĩa & Tiêu chí xử lý kỹ thuật |
+|---|---|---|
+| **BR-01** | Bán kính Geofencing chuẩn | Điểm danh chỉ hợp lệ khi khoảng cách Haversine $d \le 50\,\text{m}$. Nếu $d > 50\,\text{m}$, hệ thống từ chối và thông báo khoảng cách thực tế. |
+| **BR-02** | Khung giờ vào ca cho phép | Nhân viên được phép check-in sớm tối đa 30 phút trước giờ ca bắt đầu. Bấm sớm hơn 30 phút sẽ bị chặn. |
+| **BR-03** | Phân loại trạng thái chấm công | - Đến đúng giờ hoặc trong dung sai: `ON_TIME`  <br>- Đến muộn sau giờ quy định: `LATE`  <br>- Rời ca trước giờ kết thúc: `EARLY_LEAVE`  <br>- Không có bản ghi điểm danh: `ABSENT` |
+| **BR-04** | Đóng băng dữ liệu khóa sổ | Khi `is_locked = TRUE`, bản ghi chấm công chuyển sang trạng thái chỉ đọc (Read-only), không ai (kể cả Admin) được tự ý sửa đổi. |
+| **BR-05** | Quy chế duyệt đơn giải trình | Đơn giải trình chỉ được duyệt khi trạng thái ca chưa bị khóa sổ (`is_locked = FALSE`) và phải có lý do kèm ảnh đối soát hợp lệ. |
+| **BR-06** | Thẩm định mạng kép (Dual Check) | Khi nhân viên bật GPS, hệ thống ưu tiên toạ độ vệ tinh. Nếu thiết bị không có GPS, hệ thống kiểm tra IP kết nối phải thuộc mạng Wi-Fi của quán. |
 
-| Nghiệp Vụ | 🔴 Trước đây (Thủ công) | 🟢 Hệ thống LAN System (Mới) | ✅ Lợi ích mang lại |
-|---|---|---|---|
-| **Điểm danh** | Máy vân tay / Sổ sách | Click trên máy tính (Check IP LAN) | Nhanh chóng, không ùn tắc, 0đ chi phí máy móc |
-| **Giám sát** | Bằng mắt thường / Camera | Popup Random Check + Gắn cờ tự động | Chủ động chống gian lận, cảnh báo real-time |
-| **Nghỉ phép** | Đơn giấy, ký nháy | Form điện tử, Duyệt 1-click | Tiết kiệm thời gian, không thất lạc giấy tờ |
-| **Chốt công** | Mất 2–3 ngày đối chiếu Excel | Xuất báo cáo tự động trong 5 giây | Chính xác 100%, giảm tải cho HR |
+---
+
+## 🗄️ Thiết Kế Cơ Sở Dữ Liệu (8 Bảng CSDL Chuẩn)
+
+Hệ thống quản lý dữ liệu tập trung qua 8 bảng quan hệ:
+
+1. **`users`**: Lưu hồ sơ nhân sự, tài khoản, mật khẩu hash Argon2, vai trò (`ADMIN`, `OWNER`, `MANAGER`, `ACCOUNTANT`, `EMPLOYEE`).
+2. **`shop_locations`**: Toạ độ GPS vĩ độ/kinh độ cơ sở Hawa's Food, bán kính 50m.
+3. **`shop_wifis`**: Danh mục IP subnet, SSID mạng Wi-Fi tại cơ sở quán.
+4. **`shifts`**: Danh mục các ca làm việc tiêu chuẩn (CA1, CA2, CA3, CAGAY).
+5. **`schedules`**: Lịch phân ca chi tiết cho từng nhân viên theo từng ngày (`work_date`).
+6. **`attendances`**: Dữ liệu điểm danh thực tế (giờ vào, giờ ra, toạ độ, khoảng cách Haversine, trạng thái, cờ `is_locked`).
+7. **`attendance_requests`**: Đơn giải trình bổ sung giờ công kèm minh chứng và lý do.
+8. **`audit_logs`**: Nhật ký an toàn thông tin, lưu trữ dấu vết truy cập mạng và các thao tác nhạy cảm.
+
+---
+
+## 🗺️ Danh Mục 13 Trang Sơ Đồ Kỹ Thuật Draw.io (Phụ Lục A)
+
+Hệ thống được thiết kế và mô hình hóa đầy đủ trên 13 trang sơ đồ kỹ thuật:
+1. **Trang 1**: Sơ đồ luồng dữ liệu (DFD Mức 0 Context Diagram & Mức 1 phân rã 5 tiến trình).
+2. **Trang 2**: Sơ đồ ca sử dụng (Use Case Diagram tổng quát toàn hệ thống).
+3. **Trang 3**: Sơ đồ quan hệ thực thể (Physical ERD 8 bảng CSDL chuẩn vật lý).
+4. **Trang 4**: Sơ đồ quy trình tổng thể (Workflow Activity Diagram vòng đời chấm công khép kín).
+5. **Trang 5**: Sơ đồ quy trình chi tiết điểm danh Geofencing Haversine 50m.
+6. **Trang 6**: Sơ đồ quy trình lập lịch phân ca và thuật toán chống trùng ca.
+7. **Trang 7**: Sơ đồ quy trình giám sát trực tiếp Live WebSocket (RFC 6455).
+8. **Trang 8**: Sơ đồ quy trình giải trình sai lệch và phê duyệt quên bấm công.
+9. **Trang 9**: Sơ đồ quy trình khóa sổ kỳ công và xuất bảng công Excel.
+10. **Trang 10**: Sơ đồ kiến trúc liên kết phân hệ chức năng (Component Integration).
+11. **Trang 11**: Sơ đồ tuần tự (UML Sequence Diagram chi tiết 7 Lifelines).
+12. **Trang 12**: Sơ đồ máy trạng thái (UML State Machine Diagram vòng đời ca làm việc).
+13. **Trang 13**: Sơ đồ phân rã chức năng dạng khối hình cây (FDD 5 phân hệ và 21 module con).

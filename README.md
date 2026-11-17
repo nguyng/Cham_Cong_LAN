@@ -1,8 +1,24 @@
-# Hệ thống chấm công qua mạng LAN
+# Hệ thống quản lý và chấm công trực tuyến định vị Geofencing thời gian thực — Quán Hawa's Food Đà Nẵng
 
-Hệ thống chấm công nội bộ gồm Server FastAPI, ứng dụng nhân viên và
-ứng dụng quản lý PySide6. Dữ liệu được lưu tập trung bằng SQLite trên máy
-Server; Client không truy cập trực tiếp database.
+> **Học phần**: Mạng máy tính / Lập trình mạng — Khoa Công Nghệ Thông Tin, Trường Đại học Kiến Trúc Đà Nẵng  
+> **Người hướng dẫn khoa học**: TS. Đặng Hùng Vĩ  
+> **Đơn vị ứng dụng thực tế**: Quán Hawa's Food Đà Nẵng  
+> **Nhóm thực hiện**: Huan rose và dong bon (Lớp 23CT1 — Khóa 2023)  
+> **Thành viên nhóm**:
+> 1. Ngô Đức An (Trưởng nhóm - MSSV: 114534) - Phân hệ MOD-01 & An ninh mạng
+> 2. Nguyễn Văn Nguyên (Thành viên - MSSV: 115201) - Phân hệ MOD-02 & CSDL ERD
+> 3. Trần Đức Trí (Thành viên - MSSV: 114889) - Phân hệ MOD-03 & Thuật toán xếp ca
+> 4. Nguyễn Ngọc Thương (Thành viên - MSSV: 115042) - Phân hệ MOD-05 & Đối soát Excel
+> 5. Vũ Huy Hoàng (Thành viên - MSSV: 114776) - Phân hệ MOD-04 & Geofencing / WebSocket
+>
+> **Tài liệu tham chiếu chính thức**:
+> - Báo cáo phân tích hệ thống chi tiết: `BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx` và [phan_tich_du_an_cham_cong.md](phan_tich_du_an_cham_cong.md)
+> - Đặc tả 5 phân hệ kỹ thuật: [Module_ChamCong_LAN.md](Module_ChamCong_LAN.md)
+> - 13 trang sơ đồ kỹ thuật Draw.io: `HAWAS_FOOD_HOAN_CHINH_13_TRANG.drawio`
+
+Hệ thống chấm công trực tuyến gồm Server FastAPI, ứng dụng nhân viên và
+ứng dụng quản lý PySide6 (kèm giao diện Web Mobile chấm công). Dữ liệu được lưu tập trung bằng SQLite trên máy
+Server; Client không truy cập trực tiếp database. Bán kính Geofencing chuẩn $R = 50\,\text{m}$ (Haversine), phát hiện và thông báo tức thời qua WebSocket (< 100ms).
 
 ## Chạy nhanh từ mã nguồn
 
@@ -114,22 +130,22 @@ và quyền vị trí cho ứng dụng desktop. Khi nhấn CHECK-IN/CHECK-OUT, C
 sau được bật:
 
 - Client `config.json`: `"allow_lan_ip_location_fallback": true`.
-- Server `server.env`: `ALLOW_LAN_IP_LOCATION_FALLBACK=true`.
+- Server `server/.env` (hoặc `server.env` khi dùng bản portable): `ALLOW_LAN_IP_LOCATION_FALLBACK=true`.
 
 Server vẫn kiểm tra IP thuộc `ALLOWED_NETWORKS`, thiết bị đã được phê duyệt và lưu nguồn vị trí
 `LAN_IP_FALLBACK` trong kết quả nghiệp vụ. Đặt một trong hai cờ thành `false` để bắt buộc GPS.
 
-Để chỉ cho phép chấm công trong phạm vi công ty, cấu hình `server.env` rồi khởi động lại Server:
+Để chỉ cho phép chấm công trong phạm vi Quán Hawa's Food Đà Nẵng, cấu hình `server/.env` (hoặc `server.env` nếu chạy bản portable) rồi khởi động lại Server:
 
 ```env
 GEOFENCING_ENABLED=true
-COMPANY_LATITUDE=10.776889
-COMPANY_LONGITUDE=106.700806
-GEOFENCE_RADIUS_METERS=200
-GEOFENCE_MAX_ACCURACY_METERS=250
+COMPANY_LATITUDE=16.0678
+COMPANY_LONGITUDE=108.2208
+GEOFENCE_RADIUS_METERS=50
+GEOFENCE_MAX_ACCURACY_METERS=100
 ```
 
-Khi bật geofencing, Server tự tính khoảng cách theo tọa độ WGS-84, từ chối GPS vượt bán kính hoặc
+Khi bật geofencing, Server tự tính khoảng cách theo giải thuật Haversine, từ chối GPS vượt bán kính $50\,\text{m}$ hoặc
 có sai số quá lớn và lưu khoảng cách tại thời điểm check-in/check-out. Muốn tuyệt đối bắt buộc GPS,
 đặt thêm `ALLOW_LAN_IP_LOCATION_FALLBACK=false`.
 
@@ -149,7 +165,7 @@ Trong `AttendanceAdmin`, chọn **Lương & chuyên cần**, chọn kỳ lương
 
 ## Chạy từ mã nguồn
 
-Yêu cầu Windows 10/11 và Python 3.12.
+Yêu cầu Windows 10/11 và Python 3.12 (hoặc Python 3.13).
 
 ```powershell
 .\scripts\setup.ps1
@@ -159,17 +175,16 @@ Yêu cầu Windows 10/11 và Python 3.12.
 `setup.ps1` tự tạo `server/.env` cùng JWT secret ngẫu nhiên ở lần chạy đầu và không ghi đè
 cấu hình hiện có. Không chép nguyên giá trị `CHANGE_...` trong file mẫu vào môi trường chạy.
 
-Mở Client trong PowerShell khác:
+Mở giao diện Nhân viên (Client) trong PowerShell khác:
 
 ```powershell
-$env:PYTHONPATH = "$PWD\client"
-.\.venv\Scripts\python.exe -m app.main
+.\.venv\Scripts\python.exe client_launcher.py
 ```
 
-Mở Admin:
+Mở giao diện Quản lý / Admin:
 
 ```powershell
-.\.venv\Scripts\python.exe .\admin\main.py
+.\.venv\Scripts\python.exe admin_launcher.py
 ```
 
 API mặc định: `http://127.0.0.1:8000`; OpenAPI: `http://127.0.0.1:8000/docs`.

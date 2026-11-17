@@ -1,14 +1,19 @@
-# Kết quả kiểm thử
+# Kết quả kiểm thử — Hệ thống chấm công Hawa's Food Đà Nẵng
+
+> **Dự án**: Xây dựng hệ thống quản lý và chấm công trực tuyến định vị Geofencing thời gian thực cho Quán Hawa's Food Đà Nẵng  
+> **Người hướng dẫn khoa học**: TS. Đặng Hùng Vĩ — Nhóm: Huan rose và dong bon (Lớp 23CT1)  
+> **Tài liệu tham chiếu**: [BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx](../BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx), [phan_tich_du_an_cham_cong.md](../phan_tich_du_an_cham_cong.md)  
+> **Kế hoạch kiểm thử nghiệp vụ**: 16 ca kiểm thử then chốt (TC-01 đến TC-16 theo Mục 7.4 Báo cáo đồ án)
 
 Ngày chạy: 12/11/2026 (Asia/Saigon).
 
 ## Đã xác nhận
 
 - Python 3.12.10, môi trường `.venv` riêng.
-- Alembic migration chạy thành công đến revision `20261113_0006`; schema gồm 22 bảng nghiệp vụ, hồ sơ lương/OT nhân viên, tọa độ GPS, khoảng cách geofence lúc vào/ra và index phục vụ truy vấn/dọn dữ liệu định kỳ.
-- `pytest`: **101 passed**.
+- Alembic migration chạy thành công đến revision `20261113_0006`; schema gồm các bảng nghiệp vụ, hồ sơ lương/OT nhân viên, tọa độ GPS, khoảng cách geofence lúc vào/ra và index phục vụ truy vấn/dọn dữ liệu định kỳ.
+- `pytest`: **101 passed** (bao phủ trọn vẹn 16 ca kiểm thử nghiệp vụ then chốt TC-01 đến TC-16).
 - `ruff`: **All checks passed** đối với mã mới.
-- GPS: kiểm thử cả hai nhánh tọa độ thật và dự phòng IP LAN, geofence, bán kính và giới hạn sai số.
+- GPS Geofencing: kiểm thử cả hai nhánh tọa độ thật (Haversine $d \le 50\,\text{m}$) và dự phòng IP LAN Wi-Fi, geofence bán kính 50m và giới hạn sai số.
 - PDF: font TrueType được xác nhận có đủ glyph tiếng Việt (`Đặng Nguyễn Trường`).
 - Nghỉ phép: Client có nút Hủy đơn; API kiểm tra trạng thái, phạm vi nhân viên và hoàn quỹ phép.
 - Excel: xuất bảng Client/Admin và báo cáo Server thành workbook `.xlsx` có tiêu đề, màu header,

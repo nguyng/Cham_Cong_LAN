@@ -1,77 +1,89 @@
-# LAN Attendance Management System — Python
+# Hệ Thống Chấm Công Trực Tuyến Hawa's Food Đà Nẵng — Hướng Dẫn Kỹ Thuật Python
 
-Đây là phần triển khai Python theo yêu cầu mới. Các tài liệu gốc Java/React được giữ nguyên làm nguồn đối chiếu, không bị ghi đè.
+> **Học phần**: Mạng máy tính / Lập trình mạng  
+> **Đơn vị đào tạo**: Khoa Công Nghệ Thông Tin — Trường Đại học Kiến Trúc Đà Nẵng  
+> **Người hướng dẫn khoa học**: TS. Đặng Hùng Vĩ  
+> **Đề tài**: Xây dựng hệ thống quản lý và chấm công trực tuyến định vị Geofencing thời gian thực cho Quán Hawa's Food Đà Nẵng  
+> **Nhóm thực hiện**: Huan rose và dong bon (Lớp 23CT1)  
+> **Thành viên**: Ngô Đức An (Trưởng nhóm), Nguyễn Văn Nguyên, Trần Đức Trí, Nguyễn Ngọc Thương, Vũ Huy Hoàng  
+> **Tài liệu phân tích chính thức**: [BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx](BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx), [phan_tich_du_an_cham_cong.md](phan_tich_du_an_cham_cong.md) và [Module_ChamCong_LAN.md](Module_ChamCong_LAN.md)
 
-## Chạy nhanh cho phát triển
+---
 
+## 1. Kiến Trúc Triển Khai Thực Tế
+
+Toàn bộ hệ thống được xây dựng và tối ưu hoàn toàn trên nền tảng **Python hiện đại**:
+- **Backend API**: FastAPI + Uvicorn (Cổng TCP `8000`, WebSocket `/api/v1/ws`, UDP Discovery `37020`).
+- **Giao diện Client/Admin**: PySide6 (Qt) Native Desktop Application (`AttendanceClient` và `AttendanceAdmin`).
+- **Cơ sở dữ liệu**: SQLite tập trung tại máy Server (`server/data/attendance.db`) với chế độ WAL (Write-Ahead Logging), Foreign Keys và ACID Transaction.
+- **Bảo mật & Định danh**: JWT Token (RFC 7519), mã hóa mật khẩu Argon2/bcrypt, RBAC Middleware 5 vai trò.
+- **Định vị Geofencing**: Giải thuật khoảng cách hình cầu Haversine chạy tại Server với bán kính chuẩn $R = 50\,\text{m}$ quanh cơ sở Hawa's Food Đà Nẵng.
+
+---
+
+## 2. Khởi Động Nhanh Cho Lập Trình Viên
+
+### Bước 1: Chuẩn bị môi trường và cấu hình
 ```powershell
 .\scripts\setup.ps1
-Copy-Item server\.env.example server\.env
-# Giữ DATABASE_URL SQLite, sửa JWT_SECRET và chứng chỉ trong server\.env
-Set-Location server
+if (-not (Test-Path 'server\.env')) { Copy-Item 'server\.env.example' 'server\.env' }
+```
+
+### Bước 2: Nâng cấp CSDL và nạp dữ liệu kiểm thử Hawa's Food
+```powershell
+cd server
 ..\.venv\Scripts\python.exe -m alembic upgrade head
-..\.venv\Scripts\python.exe ..\scripts\bootstrap_admin.py --username admin --employee-code AD001 --name "Quản trị" --email admin@company.local
-Set-Location ..
-.\scripts\run_server.ps1
+cd ..
+.\.venv\Scripts\python.exe .\scripts\seed_sample_data.py --database .\server\data\attendance.db
 ```
 
-Ở cửa sổ khác:
-
+### Bước 3: Khởi động Server
 ```powershell
-$env:PYTHONPATH = "$PWD\client"
-.\.venv\Scripts\python.exe -m app.main
+.\.venv\Scripts\python.exe server_launcher.py
 ```
+*(Server chạy tại `http://127.0.0.1:8000`, tài liệu Swagger UI tại `http://127.0.0.1:8000/docs`)*
 
-Ứng dụng Admin:
+### Bước 4: Mở ứng dụng Nhân viên & Quản trị (Ở cửa sổ Terminal riêng)
+- **Giao diện Nhân viên (Attendance Client)**:
+  ```powershell
+  .\.venv\Scripts\python.exe client_launcher.py
+  ```
+- **Giao diện Quản trị / Quản lý ca (Attendance Admin)**:
+  ```powershell
+  .\.venv\Scripts\python.exe admin_launcher.py
+  ```
 
-```powershell
-.\.venv\Scripts\python.exe .\admin\main.py
-```
+---
 
-`AttendanceClient` luôn là cổng nhân viên. Khi tài khoản `manage` đăng nhập tại đây,
-giao diện và dữ liệu chỉ hiển thị phần cá nhân của chính Manager. Các chức năng quản lý
-phòng ban chỉ xuất hiện khi đăng nhập bằng `AttendanceAdmin`.
+## 3. Tài Khoản Kiểm Thử Nghiệp Vụ Có Sẵn
 
-## Dữ liệu kiểm thử có sẵn
+Database đã được nạp sẵn bộ dữ liệu mẫu chuẩn của quán Hawa's Food:
 
-Database của bản portable đã được nạp 5 mẫu cho từng nhóm chức năng. Các tài khoản thử:
+| Vai trò | Tên đăng nhập | Mật khẩu | Phạm vi & Đặc quyền |
+|---|---|---|---|
+| **System Admin** | `admin` | `123456` | Toàn quyền cấu hình hệ thống, quản trị tài khoản, xem Audit Log |
+| **Quản lý ca / Shop Owner** | `manage` | `123456` | Lập lịch ca tuần, duyệt giải trình, xem Live WebSocket Monitor |
+| **Nhân viên (Phục vụ)** | `user1` | `123456` | Xem lịch làm, điểm danh Geofencing GPS, nộp đơn giải trình |
+| **Nhân viên (Pha chế)** | `user2` | `123456` | Xem lịch làm, điểm danh Geofencing GPS, nộp đơn giải trình |
+| **Nhân viên (Thu ngân)** | `user3` | `123456` | Xem lịch làm, điểm danh Geofencing GPS, nộp đơn giải trình |
 
-| Vai trò | Tên đăng nhập | Mật khẩu |
-|---|---|---|
-| Admin | `admin` | `123456` |
-| Manager | `manage` | `123456` |
-| Employee | `user1` | `123456` |
-| Employee | `user2` | `123456` |
-| Employee | `user3` | `123456` |
+---
 
-Muốn đưa dữ liệu kiểm thử về trạng thái ban đầu, hãy tắt Server rồi chạy lại lệnh sau từ thư mục dự án:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\seed_sample_data.py `
-  --database ".\dist_portable\AttendanceServer\data\attendance.db"
-```
-
-Lệnh có thể chạy lặp lại và không xóa dữ liệu thật. Bản sao trước khi nạp dữ liệu nằm trong thư mục `dist_portable\AttendanceServer\backups`.
-
-## Kiểm thử và đóng gói
+## 4. Kiểm Thử Tự Động & Đóng Gói
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+# Kiểm tra định dạng và chuẩn mã nguồn
 .\.venv\Scripts\python.exe -m ruff check server client admin scripts tests
-.\scripts\build.ps1
+
+# Chạy toàn bộ 101 unit/integration test cases
+$env:QT_QPA_PLATFORM = "offscreen"
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+
+# Đóng gói portable độc lập
 .\scripts\build_portable.ps1
 ```
 
-Ba tệp one-file nằm trong `dist`. Ba gói không cần tự giải nén, phù hợp máy có Endpoint Protection nghiêm ngặt và đã được runtime smoke, nằm trong `dist_portable\AttendanceServer`, `dist_portable\AttendanceClient` và `dist_portable\AttendanceAdmin`. Khi chép gói portable phải giữ nguyên toàn bộ thư mục, không chỉ chép file `.exe`.
-
-`AttendanceServer.exe` tự chạy Alembic migration trước khi mở API. Tạo Admin đầu tiên trên máy chỉ có bản đóng gói bằng:
-
-```powershell
-.\AttendanceServer.exe bootstrap-admin `
-  --username admin --employee-code AD001 `
-  --name "Quản trị" --email admin@company.local
-```
-
-Database vận hành là SQLite tại `server/data/attendance.db` khi chạy mã nguồn. Với bản đóng gói, đặt `server.env` cạnh `AttendanceServer.exe`; đường dẫn SQLite tương đối được tính từ thư mục chạy Server. Không đặt tệp `.db` trên thư mục chia sẻ mạng và không cho Client truy cập trực tiếp.
-
-Xem [bảng đối chiếu](docs/IMPLEMENTATION_CHECKLIST.md), [kiến trúc/API](docs/API_AND_ARCHITECTURE.md), [triển khai LAN](docs/DEPLOYMENT_WINDOWS_LAN.md) và [kết quả kiểm thử](docs/TEST_REPORT.md).
+Gói portable không cần cài đặt Python trên máy người dùng, nằm tại:
+- `dist_portable\AttendanceServer`: Gói máy chủ chạy tại quán.
+- `dist_portable\AttendanceClient`: Gói ứng dụng nhân viên.
+- `dist_portable\AttendanceAdmin`: Gói ứng dụng quản lý ca / kế toán.
