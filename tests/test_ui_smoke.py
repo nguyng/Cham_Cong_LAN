@@ -7,8 +7,12 @@ from pathlib import Path
 def test_all_ui_pages_and_typed_dialog_construct():
     root = Path(__file__).resolve().parents[1]
     script = r"""
+from datetime import datetime
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton, QScrollArea, QTableWidget
+import app.timezone as app_timezone
 from app.network.realtime import RealtimeThread
 from app.timezone import APP_TIMEZONE_NAME, local_today
 from app.ui.dialogs import Field, FormDialog
@@ -53,6 +57,9 @@ class DummyApi:
         return []
 
 app = QApplication([])
+app_timezone.local_now = lambda: datetime(
+    2026, 11, 18, 2, 0, tzinfo=app_timezone.APP_TIMEZONE
+)
 class LoginApi:
     config = {"server_url": "http://127.0.0.1:8000"}
     def __init__(self):
@@ -70,6 +77,7 @@ user_api = DummyApi()
 window = MainWindow(user_api)
 assert window.page_names == EMPLOYEE_PAGES
 assert window.stack.count() == len(EMPLOYEE_PAGES)
+assert "ip_addresses" in TABLE_COLUMNS["Client kết nối"]
 labels = {button.text() for button in window.findChildren(QPushButton)}
 assert any("CHECK-IN" in label for label in labels)
 assert any("CHECK-OUT" in label for label in labels)
@@ -78,14 +86,47 @@ assert "Sao lưu" not in labels
 window.refresh_attendance_panel()
 mine_calls = [kwargs for _, path, kwargs in user_api.calls if path in ("/api/v1/attendance", "/api/v1/shift-assignments")]
 assert mine_calls and all(call["params"]["mine"] is True for call in mine_calls)
+today = local_today().isoformat()
+user_api.assignment_items = [{
+    "shift_name": "Ca sáng",
+    "work_date": today,
+    "shift_start_time": "08:00",
+    "shift_end_time": "17:00",
+}]
+window.refresh_attendance_panel()
+assert not window.check_in_button.isEnabled()
+assert "chỉ được phép trong giờ ca" in window.attendance_notice.text()
+app_timezone.local_now = lambda: datetime(
+    2026, 11, 18, 8, 0, tzinfo=app_timezone.APP_TIMEZONE
+)
+window.refresh_attendance_panel()
+assert window.check_in_button.isEnabled()
 assert hasattr(window, "attendance_summary")
 assert hasattr(window, "attendance_location")
 assert hasattr(window, "show_random_check")
+weekly_table = window.weekly_shift_table
+assert weekly_table is not None
+assert weekly_table.columnCount() == 8
+assert [weekly_table.horizontalHeaderItem(i).text() for i in range(8)] == [
+    "Nhân viên",
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy",
+    "Chủ Nhật",
+]
+assert window.weekly_shift_week_start.weekday() == 0
+from datetime import date
+window.show_week_containing(date(2026, 11, 25))
+assert window.weekly_shift_week_start == date(2026, 11, 23)
 assert APP_TIMEZONE_NAME == "Asia/Ho_Chi_Minh"
 assert MainWindow.format_cell("2026-11-13T00:00:00Z") == "13/11/2026 07:00:00"
 user_api.attendance_items = [{
     "id": 10,
-    "work_date": "2026-11-13",
+    "work_date": today,
+    "shift_id": 5,
     "shift_name": "Ca sáng",
     "shift_start_time": "08:00",
     "shift_end_time": "17:00",
@@ -96,7 +137,6 @@ user_api.attendance_items = [{
     "is_late": True,
     "status": "LATE",
 }]
-user_api.assignment_items = [{"shift_name": "Ca sáng", "work_date": "2026-11-13"}]
 window.refresh_attendance_panel()
 assert window.attendance_summary["shift"].text() == "Ca sáng • 08:00–17:00"
 assert window.attendance_summary["check_in"].text() == "08:20"
@@ -104,9 +144,50 @@ assert window.attendance_summary["check_out"].text() == "08:20"
 assert window.attendance_summary["worked"].text() == "0 giờ 00 phút"
 assert "ĐI MUỘN" in window.attendance_status.text()
 assert "20 phút" in window.attendance_notice.text()
-today = local_today().isoformat()
+stale_open_record = {
+    "id": 9,
+    "work_date": today,
+    "shift_id": 4,
+    "shift_name": "Ca cũ",
+    "shift_start_time": "07:00",
+    "shift_end_time": "15:00",
+    "check_in_at": "2026-11-18T00:00:00Z",
+    "check_out_at": None,
+    "worked_minutes": 0,
+    "status": "OPEN",
+}
+checked_out_record = {
+    "id": 11,
+    "work_date": today,
+    "shift_id": 5,
+    "shift_name": "Ca sáng",
+    "shift_start_time": "08:00",
+    "shift_end_time": "17:00",
+    "check_in_at": "2026-11-18T01:00:00Z",
+    "check_out_at": "2026-11-18T08:45:00Z",
+    "worked_minutes": 465,
+    "late_minutes": 0,
+    "is_late": False,
+    "status": "ON_TIME",
+}
+user_api.assignment_items = [{
+    "shift_id": 5,
+    "shift_name": "Ca sáng",
+    "work_date": today,
+    "shift_start_time": "08:00",
+    "shift_end_time": "17:00",
+}]
+user_api.attendance_items = [stale_open_record, checked_out_record]
+window.refresh_attendance_panel(preferred_record=checked_out_record)
+assert window.attendance_summary["check_in"].text() == "08:00"
+assert window.attendance_summary["check_out"].text() == "15:45"
+assert window.attendance_summary["worked"].text() == "7 giờ 45 phút"
+window.refresh_attendance_panel()
+assert window.attendance_summary["check_out"].text() == "15:45"
+assert window.attendance_summary["worked"].text() == "7 giờ 45 phút"
 attendance_calls = [kwargs for _, path, kwargs in user_api.calls if path == "/api/v1/attendance"]
-assert attendance_calls[-1]["params"]["start"] == today
+from datetime import date, timedelta
+assert attendance_calls[-1]["params"]["start"] == (date.fromisoformat(today) - timedelta(days=1)).isoformat()
 assert attendance_calls[-1]["params"]["end"] == today
 user_buttons = {button.text(): button for button in window.findChildren(QPushButton)}
 assert not user_buttons["Yêu cầu điều chỉnh"].icon().isNull()
@@ -136,7 +217,54 @@ dialog.close()
 weekdays = FormDialog("Ngày làm", [Field("weekdays", "Ngày", "weekdays", [0, 2, 4])])
 assert weekdays.values() == {"weekdays": [0, 2, 4]}
 weekdays.close()
+date_range = FormDialog("Khoảng ngày", [
+    Field("start_date", "Từ ngày", "date", "2026-11-21"),
+    Field("end_date", "Đến ngày", "date", "2026-11-27"),
+])
+assert date_range.values() == {
+    "start_date": "2026-11-21",
+    "end_date": "2026-11-27",
+}
+date_input = date_range.widgets["start_date"]
+assert date_input.calendarWidget().isGridVisible()
+assert date_input.property("calendarPicker") is True
+date_range.show()
+app.processEvents()
+date_snapshot = QPixmap(date_input.size())
+date_input.render(date_snapshot)
+assert date_snapshot.toImage().pixelColor(
+    date_input.width() - 18, date_input.height() // 2
+) == QColor("#4F46E5")
+QTest.mouseClick(
+    date_input,
+    Qt.LeftButton,
+    pos=__import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(
+        date_input.width() - 10, date_input.height() // 2
+    ),
+)
+app.processEvents()
+assert date_input.calendarWidget().isVisible()
+date_input.calendarWidget().hide()
+date_range.close()
 admin_window = MainWindow(DummyApi(), admin_only=True)
+admin_shift_page = admin_window.stack.widget(
+    ADMIN_PAGES.index("Phân ca")
+)
+date_filter_edits = [
+    widget
+    for widget in admin_shift_page.findChildren(
+        __import__("PySide6.QtWidgets", fromlist=["QDateEdit"]).QDateEdit
+    )
+    if widget.property("calendarPicker")
+]
+assert len(date_filter_edits) == 2
+assert all(date_edit.calendarPopup() for date_edit in date_filter_edits)
+for date_edit in admin_shift_page.findChildren(
+    __import__("PySide6.QtWidgets", fromlist=["QDateEdit"]).QDateEdit
+):
+    assert date_edit.calendarPopup()
+    assert date_edit.calendarWidget().isGridVisible()
+    assert date_edit.width() >= 150
 assert admin_window.stack.count() == len(ADMIN_PAGES)
 assert "Phê duyệt thiết bị" in ADMIN_PAGES
 assert "Lương & chuyên cần" in ADMIN_PAGES
@@ -192,6 +320,8 @@ assert "qlineargradient" in admin_window.styleSheet()
 assert "QTableWidget::item:selected" in admin_window.styleSheet()
 admin_window.toggle_theme()
 assert admin_window.dark is True
+assert 'QDateEdit[calendarPicker="true"]' in admin_window.styleSheet()
+assert "QCalendarWidget QAbstractItemView" in admin_window.styleSheet()
 admin_window.toggle_theme()
 assert admin_window.dark is False
 admin_window.show_page(1)

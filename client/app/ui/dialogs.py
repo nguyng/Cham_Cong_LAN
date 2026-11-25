@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QDate, QTime
+from PySide6.QtCore import QDate, QRectF, Qt, QTime
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.timezone import local_today
 from app.ui.icons import decorate_button
 
 
@@ -31,6 +33,34 @@ class Field:
     value: Any = None
     options: list[tuple[str, Any]] | None = None
     required: bool = True
+
+
+class CalendarDateEdit(QDateEdit):
+    def __init__(self, accent: str = "#4F46E5", parent=None):
+        super().__init__(parent)
+        self.setCalendarPopup(True)
+        self.setProperty("calendarPicker", True)
+        self.calendar_accent = QColor(accent)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        button = QRectF(self.width() - 34, 2, 32, self.height() - 4)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self.calendar_accent)
+        painter.drawRoundedRect(button, 8, 8)
+
+        center_x = button.center().x()
+        center_y = button.center().y()
+        painter.setPen(QPen(QColor("#FFFFFF"), 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(
+            QRectF(center_x - 6, center_y - 5, 12, 10), 1.5, 1.5
+        )
+        painter.drawLine(center_x - 6, center_y - 2, center_x + 6, center_y - 2)
+        painter.drawLine(center_x - 3, center_y - 7, center_x - 3, center_y - 4)
+        painter.drawLine(center_x + 3, center_y - 7, center_x + 3, center_y - 4)
 
 
 class FormDialog(QDialog):
@@ -50,6 +80,7 @@ class FormDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         ok_button = buttons.button(QDialogButtonBox.Ok)
         cancel_button = buttons.button(QDialogButtonBox.Cancel)
+        self.ok_button = ok_button
         ok_button.setText("Lưu thay đổi")
         cancel_button.setText("Hủy")
         cancel_button.setProperty("secondary", True)
@@ -61,13 +92,24 @@ class FormDialog(QDialog):
 
     def _widget(self, field: Field):
         if field.kind == "date":
-            widget = QDateEdit(calendarPopup=True)
-            widget.setDisplayFormat("dd/MM/yyyy")
-            widget.setDate(
-                QDate.fromString(str(field.value), "yyyy-MM-dd")
-                if field.value
-                else QDate.currentDate()
+            parent = self.parentWidget()
+            accent = (
+                "#0F766E"
+                if parent is not None and getattr(parent, "admin_only", False)
+                else "#4F46E5"
             )
+            widget = CalendarDateEdit(accent)
+            widget.setDisplayFormat("dd/MM/yyyy")
+            widget.setMinimumDate(QDate(2020, 1, 1))
+            widget.setMaximumDate(QDate(2100, 12, 31))
+            widget.calendarWidget().setFirstDayOfWeek(Qt.Monday)
+            widget.calendarWidget().setGridVisible(True)
+            widget.setFixedWidth(220)
+            if field.value:
+                widget.setDate(QDate.fromString(str(field.value), "yyyy-MM-dd"))
+            else:
+                today = local_today()
+                widget.setDate(QDate(today.year, today.month, today.day))
             return widget
         if field.kind == "time":
             widget = QTimeEdit()
@@ -169,4 +211,14 @@ class FormDialog(QDialog):
                 "Vui lòng nhập/chọn: " + ", ".join(missing),
             )
             return
+        if "start_date" in values and "end_date" in values:
+            start_date = QDate.fromString(str(values["start_date"]), "yyyy-MM-dd")
+            end_date = QDate.fromString(str(values["end_date"]), "yyyy-MM-dd")
+            if start_date.isValid() and end_date.isValid() and end_date < start_date:
+                QMessageBox.warning(
+                    self,
+                    "Khoảng ngày không hợp lệ",
+                    "Ngày kết thúc phải từ ngày bắt đầu trở đi.",
+                )
+                return
         super().accept()

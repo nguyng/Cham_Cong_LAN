@@ -1,8 +1,11 @@
 import asyncio
 import json
+import logging
 
 import websockets
 from PySide6.QtCore import QThread, Signal
+
+logger = logging.getLogger(__name__)
 
 
 class RealtimeThread(QThread):
@@ -64,11 +67,11 @@ class RealtimeThread(QThread):
                                 self.message.emit(message)
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception:
+                logger.exception("Realtime WebSocket connection interrupted")
                 self.connection_changed.emit(False)
                 self.error.emit(
-                    "Kết nối thông báo thời gian thực bị gián đoạn "
-                    f"({type(exc).__name__}). Hệ thống sẽ tự kết nối lại."
+                    "Kết nối thông báo đang gián đoạn. Hệ thống sẽ tự kết nối lại."
                 )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30)

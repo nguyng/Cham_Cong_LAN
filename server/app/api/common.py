@@ -127,6 +127,11 @@ def ensure_employee(user: User) -> Employee:
     return user.employee
 
 
+def protect_root_admin(target: User, actor: User):
+    if target.is_root_admin and not actor.is_root_admin:
+        raise HTTPException(403, "Chỉ Admin gốc mới được chỉnh sửa tài khoản Admin gốc")
+
+
 def protect_admin_continuity(db: Session, target: User, actor: User):
     """Prevent account changes that could remove the last usable Admin."""
     if not target.active or target.role.name != RoleName.ADMIN:

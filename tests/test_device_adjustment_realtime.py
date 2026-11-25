@@ -107,7 +107,7 @@ def test_manager_can_remove_old_device_in_own_department(
     assert all(item["id"] != device_id for item in pending.json())
 
 
-def test_removed_device_with_attendance_is_archived_and_can_register_again(
+def test_removed_device_with_attendance_is_deleted_and_can_register_again(
     client, employee_headers, manager_headers, approved_employee_device
 ):
     check_in = client.post(
@@ -136,7 +136,10 @@ def test_removed_device_with_attendance_is_archived_and_can_register_again(
 
     removed = client.delete(f"/api/v1/devices/{device_id}", headers=manager_headers)
     assert removed.status_code == 200
-    assert removed.json()["archived"] is True
+    assert removed.json() == {"id": device_id, "deleted": True, "archived": False}
+    with SessionLocal() as db:
+        assert db.get(Device, device_id) is None
+        assert db.query(AttendanceRecord).filter_by(device_id=device_id).count() == 0
 
     registered_again = client.post(
         "/api/v1/devices",
@@ -144,7 +147,7 @@ def test_removed_device_with_attendance_is_archived_and_can_register_again(
         headers=employee_headers,
     )
     assert registered_again.status_code == 201
-    assert registered_again.json() == {"id": device_id, "approved": False}
+    assert registered_again.json()["approved"] is False
 
 
 def test_same_workstation_can_be_registered_for_multiple_accounts(
@@ -252,7 +255,9 @@ def test_adjustment_rejects_invalid_time_order(
     assert reviewed.status_code == 409
 
 
-def test_websocket_receives_attendance_broadcast(client, approved_employee_device):
+def test_websocket_receives_attendance_broadcast(
+    client, approved_employee_device, admin_headers
+):
     login = client.post(
         "/api/v1/auth/login",
         json={"username": "employee", "password": "EmployeePass123!"},
@@ -260,6 +265,17 @@ def test_websocket_receives_attendance_broadcast(client, approved_employee_devic
     headers = {"Authorization": f"Bearer {login['access_token']}"}
     with client.websocket_connect("/api/v1/ws", headers=headers) as socket:
         assert socket.receive_json()["type"] == "connected"
+        with client.websocket_connect(
+            "/api/v1/ws", headers=admin_headers
+        ) as admin_socket:
+            assert admin_socket.receive_json()["type"] == "connected"
+            connected = client.get("/api/v1/clients", headers=admin_headers)
+            assert connected.status_code == 200
+            connected_by_username = {
+                row["username"]: row for row in connected.json()
+            }
+            assert connected_by_username["admin"]["ip_addresses"] == ["127.0.0.1"]
+            assert connected_by_username["employee"]["ip_addresses"] == ["127.0.0.1"]
         response = client.post(
             "/api/v1/attendance/check-in",
             json={

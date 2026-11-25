@@ -36,6 +36,9 @@ class Settings(BaseSettings):
             "10.0.0.0/8",
             "172.16.0.0/12",
             "127.0.0.0/8",
+            "::1/128",
+            "fc00::/7",
+            "fe80::/10",
         ]
     )
     allow_lan_ip_location_fallback: bool = True

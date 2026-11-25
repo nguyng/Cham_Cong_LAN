@@ -42,6 +42,7 @@ def create_initial_admin(
         password_hash=hash_password(password),
         role_id=role.id,
         employee_id=employee.id,
+        is_root_admin=db.scalar(select(User.id).where(User.is_root_admin.is_(True))) is None,
     )
     db.add(user)
     db.flush()

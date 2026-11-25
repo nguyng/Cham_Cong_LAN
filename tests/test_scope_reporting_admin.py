@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -86,8 +86,23 @@ def test_admin_dashboard_and_connected_client_details(client, admin_headers, mon
         admin = db.query(User).filter_by(username="admin").one()
         admin_id = admin.id
         employee_id = admin.employee_id
+        employee_user = db.query(User).filter_by(username="employee").one()
+        client_user_id = employee_user.id
+        client_employee_id = employee_user.employee_id
 
-    monkeypatch.setattr(connection_manager, "connection_counts", lambda: {admin_id: 2})
+    monkeypatch.setattr(
+        connection_manager,
+        "connection_counts",
+        lambda: {admin_id: 2, client_user_id: 1},
+    )
+    monkeypatch.setattr(
+        connection_manager,
+        "connection_ips",
+        lambda: {
+            admin_id: ["192.168.1.10"],
+            client_user_id: ["192.168.1.25"],
+        },
+    )
     response = client.get("/api/v1/clients", headers=admin_headers)
     assert response.status_code == 200
     assert response.json() == [
@@ -96,8 +111,17 @@ def test_admin_dashboard_and_connected_client_details(client, admin_headers, mon
             "username": "admin",
             "role": "ADMIN",
             "employee_id": employee_id,
+            "ip_addresses": ["192.168.1.10"],
             "connections": 2,
-        }
+        },
+        {
+            "user_id": client_user_id,
+            "username": "employee",
+            "role": "EMPLOYEE",
+            "employee_id": client_employee_id,
+            "ip_addresses": ["192.168.1.25"],
+            "connections": 1,
+        },
     ]
 
 
@@ -161,6 +185,9 @@ def test_manager_cannot_access_another_department(client, manager_headers):
 
 
 def test_report_includes_approved_leave_days(client, manager_headers):
+    report_date = date.today()
+    while report_date.weekday() >= 5:
+        report_date += timedelta(days=1)
     with SessionLocal.begin() as db:
         employee = db.query(Employee).filter_by(employee_code="NV001").one()
         leave_type = db.query(LeaveType).filter_by(code="AL").one()
@@ -168,8 +195,8 @@ def test_report_includes_approved_leave_days(client, manager_headers):
             LeaveRequest(
                 employee_id=employee.id,
                 leave_type_id=leave_type.id,
-                start_date=date.today(),
-                end_date=date.today(),
+                start_date=report_date,
+                end_date=report_date,
                 days=Decimal(1),
                 reason="Nghỉ phép đã duyệt để lập báo cáo",
                 status=RequestStatus.APPROVED,
@@ -177,7 +204,7 @@ def test_report_includes_approved_leave_days(client, manager_headers):
         )
     response = client.get(
         "/api/v1/reports/attendance",
-        params={"start": str(date.today()), "end": str(date.today())},
+        params={"start": str(report_date), "end": str(report_date)},
         headers=manager_headers,
     )
     assert response.status_code == 200

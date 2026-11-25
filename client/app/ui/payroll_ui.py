@@ -216,7 +216,11 @@ class PayrollUiMixin:
             QMessageBox.warning(self, "Không tính được bảng lương", str(exc))
             return
         if not isinstance(data, dict):
-            QMessageBox.warning(self, "Dữ liệu không hợp lệ", "Server trả về bảng lương không hợp lệ.")
+            QMessageBox.warning(
+                self,
+                "Không tải được bảng lương",
+                "Dữ liệu bảng lương không hợp lệ. Vui lòng thử lại.",
+            )
             return
         self.payroll_data = data
         summary = data.get("summary", {})

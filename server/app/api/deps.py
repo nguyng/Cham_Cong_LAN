@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request, WebSocket
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,12 +15,18 @@ from app.models.entities import LoginSession, RoleName, User
 Db = Annotated[Session, Depends(get_db)]
 
 
-def client_ip(request: Request) -> str:
+def client_ip(request: Request | WebSocket) -> str:
     # Chỉ tin địa chỉ kết nối do ASGI server cung cấp. Reverse proxy phải được cấu hình
     # trusted proxy ở Uvicorn, không đọc X-Forwarded-For tùy ý.
     host = request.client.host if request.client else "0.0.0.0"
     if get_settings().environment == "test" and host == "testclient":
         return "127.0.0.1"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return str(address.ipv4_mapped)
     return host
 
 
@@ -29,10 +35,14 @@ def require_lan(ip: str):
         address = ipaddress.ip_address(ip)
     except ValueError:
         raise HTTPException(403, "Địa chỉ IP của máy trạm không hợp lệ") from None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
     if not any(
         address in ipaddress.ip_network(network) for network in get_settings().allowed_networks
     ):
-        raise HTTPException(403, "Địa chỉ IP không thuộc mạng nội bộ được phép")
+        raise HTTPException(
+            403, f"IP {ip} không thuộc mạng nội bộ được phép"
+        )
 
 
 def current_user(

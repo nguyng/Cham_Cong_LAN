@@ -84,6 +84,7 @@ def fresh_database():
                     password_hash=hash_password("AdminPass123!"),
                     role_id=roles[RoleName.ADMIN].id,
                     employee_id=admin_employee.id,
+                    is_root_admin=True,
                 ),
                 User(
                     username="manager",

@@ -112,6 +112,99 @@ def test_role_change_revokes_target_sessions(client, admin_headers, manager_head
     assert client.get("/api/v1/me", headers=manager_headers).status_code == 401
 
 
+def test_root_admin_is_hidden_and_protected_from_later_admins(client, admin_headers):
+    with SessionLocal.begin() as db:
+        root = db.query(User).filter_by(username="admin").one()
+        root_id = root.id
+        root_employee_id = root.employee_id
+    created = client.post(
+        "/api/v1/employees",
+        json={
+            "employee_code": "AD002",
+            "full_name": "Quản trị thứ hai",
+            "email": "admin2@example.com",
+            "username": "admin2",
+            "temporary_password": "AdminTwoPass123!",
+            "role": "ADMIN",
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201
+
+    admin2 = login(client, "admin2", "AdminTwoPass123!")
+    admin2_headers = {"Authorization": f"Bearer {admin2['access_token']}"}
+
+    visible_users = client.get("/api/v1/users", params={"page": 1}, headers=admin2_headers)
+    assert visible_users.status_code == 200
+    assert [item["username"] for item in visible_users.json()["items"]] == ["admin"]
+    assert visible_users.json()["items"][0]["is_root_admin"] is True
+
+    assert (
+        client.patch(
+            f"/api/v1/users/{root_id}/role",
+            params={"role": "EMPLOYEE"},
+            headers=admin2_headers,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(f"/api/v1/users/{root_id}/unlock", headers=admin2_headers).status_code == 403
+    )
+    assert (
+        client.delete(
+            "/api/v1/admin/records/users",
+            params={"identifier": root_id},
+            headers=admin2_headers,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(
+            f"/api/v1/employees/{root_employee_id}/active",
+            params={"active": False},
+            headers=admin2_headers,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.put(
+            f"/api/v1/employees/{root_employee_id}",
+            json={
+                "full_name": "Đã sửa",
+                "email": "admin-updated@example.com",
+            },
+            headers=admin2_headers,
+        ).status_code
+        == 403
+    )
+    assert client.get("/api/v1/me", headers=admin2_headers).json()["is_root_admin"] is False
+    assert client.get("/api/v1/me", headers=admin_headers).json()["is_root_admin"] is True
+    root_users = client.get("/api/v1/users", params={"page": 1}, headers=admin_headers)
+    assert {item["username"] for item in root_users.json()["items"]} >= {
+        "admin",
+        "admin2",
+        "manager",
+        "employee",
+    }
+    admin2_id = next(
+        item["id"] for item in root_users.json()["items"] if item["username"] == "admin2"
+    )
+    assert (
+        client.delete(
+            "/api/v1/admin/records/users",
+            params={"identifier": admin2_id},
+            headers=admin_headers,
+        ).status_code
+        == 204
+    )
+    active_users = client.get("/api/v1/users", params={"page": 1}, headers=admin_headers)
+    assert "admin2" not in {item["username"] for item in active_users.json()["items"]}
+    archived_users = client.get(
+        "/api/v1/users", params={"page": 1, "active": False}, headers=admin_headers
+    )
+    assert "admin2" not in {item["username"] for item in archived_users.json()["items"]}
+
+
 def test_read_only_request_persists_session_last_seen(client, employee_headers):
     old_time = datetime.now(UTC) - timedelta(days=1)
     with SessionLocal.begin() as db:

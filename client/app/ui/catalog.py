@@ -289,8 +289,23 @@ TABLE_COLUMNS = {
         "last_ip",
         "last_seen_at",
     ],
-    "Client kết nối": ["user_id", "username", "role", "employee_id", "connections"],
-    "Tài khoản": ["id", "username", "role", "employee_id", "active", "locked_until"],
+    "Client kết nối": [
+        "user_id",
+        "username",
+        "role",
+        "employee_id",
+        "ip_addresses",
+        "connections",
+    ],
+    "Tài khoản": [
+        "id",
+        "username",
+        "role",
+        "is_root_admin",
+        "employee_id",
+        "active",
+        "locked_until",
+    ],
     "Lương & chuyên cần": [
         "employee_code",
         "full_name",
@@ -335,6 +350,7 @@ COLUMN_LABELS = {
     "full_name": "Họ tên",
     "username": "Tài khoản",
     "role": "Vai trò",
+    "is_root_admin": "Admin gốc",
     "email": "Email",
     "phone": "Điện thoại",
     "department": "Phòng ban",
@@ -445,6 +461,7 @@ COLUMN_LABELS = {
     "entity_type": "Đối tượng",
     "entity_id": "ID đối tượng",
     "client_ip": "IP Client",
+    "ip_addresses": "IP kết nối",
 }
 
 STATUS_TEXT = {

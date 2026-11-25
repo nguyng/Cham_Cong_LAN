@@ -1,9 +1,15 @@
+from datetime import timedelta
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.location import LocationRequest
 from app.network.api import ApiError
-from app.timezone import local_today, to_local_datetime
+from app.timezone import (
+    assignment_checkin_window_open,
+    local_today,
+    to_local_datetime,
+)
 
 
 class AttendancePortalMixin:
@@ -74,26 +80,61 @@ class AttendancePortalMixin:
             return
         self.show_toast(f"Chấm công thành công{method_text} — {status_text}")
 
-    def refresh_attendance_panel(self):
+    def refresh_attendance_panel(self, preferred_record=None):
         if not hasattr(self, "attendance_summary"):
             return
-        today = local_today().isoformat()
-        params = {"mine": True, "start": today, "end": today, "page": 1, "page_size": 5}
+        today_date = local_today()
+        today = today_date.isoformat()
+        yesterday = (today_date - timedelta(days=1)).isoformat()
+        attendance_params = {
+            "mine": True,
+            "start": yesterday,
+            "end": today,
+            "page": 1,
+            "page_size": 5,
+        }
+        schedule_params = dict(attendance_params)
+        refresh_failed = False
         try:
-            attendance_data = self.api.request("GET", "/api/v1/attendance", params=params)
+            attendance_data = self.api.request(
+                "GET", "/api/v1/attendance", params=attendance_params
+            )
             schedule_data = self.api.request(
-                "GET", "/api/v1/shift-assignments", params=params
+                "GET", "/api/v1/shift-assignments", params=schedule_params
             )
         except ApiError as exc:
-            self.attendance_notice.setText(f"Chưa thể tải trạng thái chấm công: {exc}")
-            return
+            if preferred_record is None:
+                self.attendance_notice.setText(str(exc))
+                return
+            attendance_data = {"items": [preferred_record]}
+            schedule_data = {"items": []}
+            refresh_failed = True
 
         attendance_rows = (
             attendance_data.get("items", []) if isinstance(attendance_data, dict) else []
         )
         schedule_rows = schedule_data.get("items", []) if isinstance(schedule_data, dict) else []
-        record = attendance_rows[0] if attendance_rows else None
-        assignment = schedule_rows[0] if schedule_rows else None
+        assignment = next(
+            (row for row in schedule_rows if assignment_checkin_window_open(row)),
+            next((row for row in schedule_rows if row.get("work_date") == today), None),
+        )
+        matching_record = next(
+            (
+                row
+                for row in attendance_rows
+                if assignment
+                and row.get("work_date") == assignment.get("work_date")
+                and row.get("shift_id") == assignment.get("shift_id")
+            ),
+            None,
+        )
+        record = preferred_record or matching_record or next(
+            (row for row in attendance_rows if not row.get("check_out_at")),
+            next((row for row in attendance_rows if row.get("work_date") == today), None),
+        )
+        checkin_allowed = bool(
+            assignment and assignment_checkin_window_open(assignment)
+        )
         shift_data = assignment or record or {}
         shift_text = shift_data.get("shift_name") or "Chưa có lịch làm"
         shift_start = shift_data.get("shift_start_time") or (
@@ -129,12 +170,17 @@ class AttendancePortalMixin:
 
         if not record:
             status_text, state = "CHƯA CHECK-IN", "idle"
-            self.check_in_button.setEnabled(bool(assignment))
+            self.check_in_button.setEnabled(checkin_allowed)
             self.check_out_button.setEnabled(False)
             notice = (
-                "Bạn chưa bắt đầu ca làm hôm nay."
-                if assignment
-                else "Hôm nay bạn chưa được phân ca."
+                "Bạn chưa bắt đầu ca làm được phân."
+                if checkin_allowed
+                else (
+                    "Ca đã được phân nhưng check-in chỉ được phép trong giờ ca"
+                    f" ({shift_start}–{shift_end})."
+                    if assignment
+                    else "Hôm nay bạn chưa được phân ca."
+                )
             )
         elif not record.get("check_out_at"):
             self.check_in_button.setEnabled(False)
@@ -168,6 +214,8 @@ class AttendancePortalMixin:
                     f"Ca làm hôm nay đã hoàn thành với "
                     f"{self.worked_time_text(worked_minutes)} — {result_text}."
                 )
+        if refresh_failed:
+            notice = "Đã lưu chấm công. Chưa thể làm mới lịch."
         self.attendance_status.setText(status_text)
         self.attendance_status.setProperty("state", state)
         self.attendance_status.style().unpolish(self.attendance_status)
@@ -207,7 +255,7 @@ class AttendancePortalMixin:
             )
             data = self.api.attendance(self._attendance_action, location)
             self.show_attendance_result(data)
-            self.refresh_attendance_panel()
+            self.refresh_attendance_panel(preferred_record=data)
             self.refresh_dashboard()
             completed = True
         except ApiError as exc:
@@ -226,7 +274,7 @@ class AttendancePortalMixin:
                     self._attendance_action, use_lan_ip_fallback=True
                 )
                 self.show_attendance_result(data, lan_fallback=True)
-                self.refresh_attendance_panel()
+                self.refresh_attendance_panel(preferred_record=data)
                 self.refresh_dashboard()
                 completed = True
             except ApiError as fallback_error:
@@ -240,7 +288,7 @@ class AttendancePortalMixin:
             QMessageBox.warning(
                 self,
                 "Không lấy được vị trí",
-                f"{message}\n\nChấm công chưa được gửi vì chế độ dự phòng IP nội bộ đang tắt.",
+                "Không xác định được vị trí. Hãy bật quyền vị trí rồi thử lại.",
             )
         self._finish_attendance(completed)
 

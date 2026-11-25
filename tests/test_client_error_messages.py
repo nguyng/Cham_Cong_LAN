@@ -27,7 +27,7 @@ def api_with_transport(config_path, handler):
     return api
 
 
-def test_validation_response_is_converted_to_readable_warning(runtime_path):
+def test_validation_response_hides_field_names_and_system_details(runtime_path):
     def handler(request):
         return httpx.Response(
             422,
@@ -48,8 +48,43 @@ def test_validation_response_is_converted_to_readable_warning(runtime_path):
         api.request("POST", "/api/v1/employees", json={})
 
     assert raised.value.status_code == 422
-    assert "Thông tin chưa hợp lệ" in str(raised.value)
-    assert "employee_code: không được để trống" in str(raised.value)
+    assert str(raised.value) == "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại."
+    assert "employee_code" not in str(raised.value)
+    assert "422" not in str(raised.value)
+
+
+def test_internal_server_error_hides_codes_and_english_details(runtime_path):
+    def handler(request):
+        return httpx.Response(
+            500,
+            request=request,
+            json={"detail": "Internal Server Error. Mã lỗi: ABC123"},
+        )
+
+    api = api_with_transport(runtime_path, handler)
+    with pytest.raises(ApiError) as raised:
+        api.request("GET", "/api/v1/dashboard")
+
+    assert str(raised.value) == "Hệ thống đang gặp sự cố. Vui lòng thử lại sau."
+    assert "ABC123" not in str(raised.value)
+    assert "500" not in str(raised.value)
+    assert "Internal Server Error" not in str(raised.value)
+
+
+def test_attendance_conflict_uses_a_short_vietnamese_message(runtime_path):
+    def handler(request):
+        return httpx.Response(
+            409,
+            request=request,
+            json={"detail": "Chỉ được check-in trong giờ của ca làm đã phân"},
+        )
+
+    api = api_with_transport(runtime_path, handler)
+    with pytest.raises(ApiError) as raised:
+        api.request("POST", "/api/v1/attendance/check-in")
+
+    assert str(raised.value) == "Chỉ check-in trong giờ ca đã phân."
+    assert "409" not in str(raised.value)
 
 
 def test_invalid_success_response_and_timeout_are_user_friendly(runtime_path):
@@ -57,7 +92,7 @@ def test_invalid_success_response_and_timeout_are_user_friendly(runtime_path):
         return httpx.Response(200, request=request, content=b"not-json")
 
     api = api_with_transport(runtime_path, invalid_json)
-    with pytest.raises(ApiError, match="không đúng định dạng JSON"):
+    with pytest.raises(ApiError, match="Không đọc được dữ liệu"):
         api.request("GET", "/api/v1/dashboard")
 
     def timeout(request):
@@ -68,29 +103,29 @@ def test_invalid_success_response_and_timeout_are_user_friendly(runtime_path):
         base_url="http://testserver",
         transport=httpx.MockTransport(timeout),
     )
-    with pytest.raises(ApiError, match="Server không phản hồi"):
+    with pytest.raises(ApiError, match="Máy chủ không phản hồi"):
         api.request("GET", "/api/v1/dashboard")
 
 
 def test_invalid_config_has_clear_startup_error(runtime_path):
     runtime_path.write_text("{invalid", encoding="utf-8")
 
-    with pytest.raises(ApiError, match="không đúng định dạng JSON"):
+    with pytest.raises(ApiError, match="Cấu hình ứng dụng không hợp lệ"):
         ApiClient(runtime_path)
 
     runtime_path.write_text(json.dumps({"verify_tls": False}), encoding="utf-8")
-    with pytest.raises(ApiError, match="thiếu địa chỉ server_url"):
+    with pytest.raises(ApiError, match="Thiếu địa chỉ máy chủ"):
         ApiClient(runtime_path)
 
     runtime_path.write_text(json.dumps({"server_url": "http://"}), encoding="utf-8")
-    with pytest.raises(ApiError, match="địa chỉ HTTP/HTTPS"):
+    with pytest.raises(ApiError, match="Địa chỉ máy chủ không hợp lệ"):
         ApiClient(runtime_path)
 
     runtime_path.write_text(
         json.dumps({"server_url": "http://127.0.0.1:8000", "verify_tls": "false"}),
         encoding="utf-8",
     )
-    with pytest.raises(ApiError, match="verify_tls"):
+    with pytest.raises(ApiError, match="Thiết lập kết nối không hợp lệ"):
         ApiClient(runtime_path)
 
 

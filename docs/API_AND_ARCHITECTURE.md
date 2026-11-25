@@ -28,6 +28,14 @@ OpenAPI tương tác có tại `/docs` khi Server chạy. Các nhóm đường d
 - `/api/v1/ws`: thông báo thời gian thực.
 - `/api/v1/admin/backup`, `/admin/backups`, `/admin/restore/{filename}`: quản trị dữ liệu.
 
+Admin gốc quản lý tài khoản Admin thông thường; danh sách tài khoản mặc định chỉ hiển thị tài khoản
+đang hoạt động (`active=true`). Admin thường chỉ thấy tài khoản Admin gốc, và các thao tác
+sửa/mở khóa/xóa tài khoản gốc bị từ chối ở API. Có thể truy vấn `active=false` để xem tài khoản đã
+được lưu trữ.
+
+API xóa quản trị xóa vật lý bản ghi được chọn. Các hàng phụ thuộc có khóa ngoại bắt buộc được xóa
+cascade; liên kết khóa ngoại tùy chọn được đặt `NULL` để giữ lịch sử có thể giữ lại.
+
 `POST /api/v1/leaves/{id}/cancel` cho phép hủy đơn đang chờ hoặc đơn tương lai đã duyệt; quỹ phép được hoàn lại trong cùng transaction. Các API danh sách nhận `page` và `page_size` (tối đa 200) và trả `{items, pagination}`; nếu không truyền `page`, Server vẫn trả danh sách thuần để tương thích Client cũ.
 
 AttendanceClient truyền `mine=true` cho dashboard, lịch phân ca, lịch sử chấm công và

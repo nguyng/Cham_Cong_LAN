@@ -36,6 +36,7 @@ def test_seed_data_is_repeatable_and_creates_five_samples():
         "shifts": "SELECT COUNT(*) FROM shifts WHERE code IN ('CA01','CA02','CA03','CA04','CA05')",
         "employees": "SELECT COUNT(*) FROM employees WHERE employee_code IN ('NV001','NV002','NV003','NV004','NV005')",
         "users": "SELECT COUNT(*) FROM users WHERE username IN ('admin','manage','user1','user2','user3')",
+        "root_admin": "SELECT COUNT(*) FROM users WHERE username = 'admin' AND is_root_admin = 1",
         "permissions": "SELECT COUNT(*) FROM permissions WHERE code IN ('ATTENDANCE_VIEW','ATTENDANCE_REVIEW','LEAVE_REVIEW','REPORT_EXPORT','SYSTEM_ADMIN')",
         "assignments": (
             "SELECT COUNT(*) FROM shift_assignments sa "
@@ -89,7 +90,7 @@ def test_seed_data_is_repeatable_and_creates_five_samples():
                 "WHERE e.employee_code = 'NV001'"
             ).fetchone()
 
-        assert counts == dict.fromkeys(queries, 5)
+        assert counts == {**dict.fromkeys(queries, 5), "root_admin": 1}
         check_in = datetime.fromisoformat(first_attendance[0]).replace(tzinfo=UTC)
         check_out = datetime.fromisoformat(first_attendance[1]).replace(tzinfo=UTC)
         local_check_in = check_in.astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))

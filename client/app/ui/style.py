@@ -477,6 +477,49 @@ QComboBox::drop-down, QDateEdit::drop-down, QTimeEdit::drop-down {
     border: 0;
     width: 24px;
 }
+QDateEdit[calendarPicker="true"] {
+    background: #EEF2FF;
+    border: 1px solid #C7D2FE;
+    border-bottom: 2px solid #A5B4FC;
+    font-weight: 600;
+}
+QDateEdit[calendarPicker="true"]:focus {
+    background: #FFFFFF;
+    border: 2px solid #4F46E5;
+}
+QDateEdit[calendarPicker="true"]::drop-down {
+    background: #E0E7FF;
+    border-left: 1px solid #C7D2FE;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    width: 34px;
+}
+QDateEdit[calendarPicker="true"]::drop-down:hover { background: #C7D2FE; }
+QCalendarWidget QWidget {
+    background: #FFFFFF;
+    color: #172033;
+}
+QCalendarWidget QToolButton {
+    background: #EEF2FF;
+    color: #172033;
+    border: 1px solid #C7D2FE;
+    border-radius: 6px;
+    padding: 5px;
+}
+QCalendarWidget QToolButton:hover { background: #E0E7FF; }
+QCalendarWidget QSpinBox {
+    background: #FFFFFF;
+    color: #172033;
+    border: 1px solid #C7D2FE;
+    border-radius: 5px;
+    padding: 3px;
+}
+QCalendarWidget QAbstractItemView {
+    background: #FFFFFF;
+    color: #172033;
+    selection-background-color: #4F46E5;
+    selection-color: #FFFFFF;
+}
 QComboBox QAbstractItemView {
     background: #FFFFFF;
     border: 1px solid #C7D2FE;
@@ -631,6 +674,39 @@ QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus,
 QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus {{
     background: #142033;
     border-color: {accent};
+}}
+QDateEdit[calendarPicker="true"] {{
+    background: #172554;
+    border-color: {accent};
+    border-bottom-color: {accent};
+}}
+QDateEdit[calendarPicker="true"]:focus {{ background: #142033; }}
+QDateEdit[calendarPicker="true"]::drop-down {{
+    background: #1E3A5F;
+    border-left-color: {accent};
+    width: 34px;
+}}
+QDateEdit[calendarPicker="true"]::drop-down:hover {{ background: #1E40AF; }}
+QCalendarWidget QWidget {{
+    background: #111C2E;
+    color: #E5E7EB;
+}}
+QCalendarWidget QToolButton {{
+    background: #172554;
+    color: #E5E7EB;
+    border-color: #3D4770;
+}}
+QCalendarWidget QToolButton:hover {{ background: #1E3A5F; }}
+QCalendarWidget QSpinBox {{
+    background: #111C2E;
+    color: #E5E7EB;
+    border-color: #3D4770;
+}}
+QCalendarWidget QAbstractItemView {{
+    background: #111C2E;
+    color: #E5E7EB;
+    selection-background-color: {accent};
+    selection-color: #FFFFFF;
 }}
 QComboBox QAbstractItemView {{
     background: #111C2E;

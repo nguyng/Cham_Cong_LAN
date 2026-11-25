@@ -71,8 +71,13 @@ def assignment_for_now(db: Session, employee_id: int, now: datetime) -> ShiftAss
     ).all()
     for assignment in rows:
         start, end = shift_window(assignment.work_date, assignment.shift)
-        if start - timedelta(hours=4) <= now <= end + timedelta(hours=8):
+        if start <= now <= end:
             return assignment
+    if rows:
+        raise HTTPException(
+            409,
+            "Chỉ được check-in trong giờ của ca làm đã phân",
+        )
     raise HTTPException(409, "Không có ca làm phù hợp tại thời điểm hiện tại")
 
 

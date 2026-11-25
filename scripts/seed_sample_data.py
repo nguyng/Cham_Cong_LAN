@@ -408,6 +408,7 @@ def seed(database_path: Path):
                     "role_id": roles[role_name].id,
                     "employee_id": employee.id,
                     "active": True,
+                    "is_root_admin": username == "admin",
                     "failed_login_count": 0,
                     "locked_until": None,
                 },

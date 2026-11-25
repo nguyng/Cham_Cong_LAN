@@ -51,7 +51,7 @@ class LoginDialog(QDialog):
         form.addRow("Mật khẩu", self.password)
         layout.addLayout(form)
         buttons = QHBoxLayout()
-        discover = QPushButton("Tìm Server")
+        discover = QPushButton("Tìm máy chủ")
         discover.setProperty("secondary", True)
         login = QPushButton("Đăng nhập")
         decorate_button(discover)
@@ -72,21 +72,21 @@ class LoginDialog(QDialog):
         try:
             url = self.api.discover()
         except (ApiError, OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Không thể tìm Server", str(exc))
+            message = str(exc) if isinstance(exc, ApiError) else "Không thể tìm máy chủ trong mạng."
+            QMessageBox.warning(self, "Không tìm thấy máy chủ", message)
             return
         if url:
             try:
                 self.api.set_server(url)
             except ApiError as exc:
-                QMessageBox.warning(self, "Không thể lưu Server", str(exc))
+                QMessageBox.warning(self, "Không thể lưu địa chỉ máy chủ", str(exc))
                 return
             self.server.setText(url)
         else:
             QMessageBox.warning(
                 self,
-                "Không tìm thấy Server",
-                "Không tìm thấy Server trong mạng LAN.\n\n"
-                "Hãy kiểm tra Server đang chạy, máy đang cùng mạng LAN và Firewall cho phép UDP.",
+                "Không tìm thấy máy chủ",
+                "Hãy kiểm tra máy chủ đang chạy và thiết bị đang cùng mạng.",
             )
 
     def submit(self):

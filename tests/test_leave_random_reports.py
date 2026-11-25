@@ -1,8 +1,8 @@
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from io import BytesIO
 
 from app.database.session import SessionLocal
-from app.models.entities import Employee, LeaveBalance, RandomCheck
+from app.models.entities import Employee, LeaveBalance, RandomCheck, Shift, ShiftAssignment
 from app.services.reporting import excel_report, pdf_report, register_pdf_fonts
 from openpyxl import load_workbook
 from reportlab.pdfbase import pdfmetrics
@@ -82,6 +82,51 @@ def test_shift_assignment_rejects_invalid_or_empty_schedule(client, manager_head
         client.post("/api/v1/shift-assignments", json=payload, headers=manager_headers).status_code
         == 422
     )
+
+
+def test_shift_assignment_rejects_duplicate_day_with_another_shift(
+    client, manager_headers
+):
+    work_date = date.today() + timedelta(days=1)
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        first_shift = Shift(
+            code="LOCK-A",
+            name="Ca khóa A",
+            start_time=time(8, 0),
+            end_time=time(17, 0),
+        )
+        second_shift = Shift(
+            code="LOCK-B",
+            name="Ca khóa B",
+            start_time=time(13, 0),
+            end_time=time(22, 0),
+        )
+        db.add_all([first_shift, second_shift])
+        db.flush()
+        db.add(
+            ShiftAssignment(
+                employee_id=employee.id,
+                shift_id=first_shift.id,
+                work_date=work_date,
+            )
+        )
+        employee_id = employee.id
+        second_shift_id = second_shift.id
+
+    response = client.post(
+        "/api/v1/shift-assignments",
+        json={
+            "employee_id": employee_id,
+            "shift_id": second_shift_id,
+            "start_date": str(work_date),
+            "end_date": str(work_date),
+            "weekdays": [work_date.weekday()],
+        },
+        headers=manager_headers,
+    )
+    assert response.status_code == 409
+    assert "Ngày trùng lịch" in response.json()["detail"]
 
 
 def test_random_check_response_and_alert_review(client, employee_headers, manager_headers):

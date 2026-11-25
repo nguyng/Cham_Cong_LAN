@@ -119,7 +119,7 @@ class SessionLifecycleMixin:
             or self._session_end_emitted
         ):
             return
-        self.connection.setText("● Server nội bộ đã dừng — đang đóng ứng dụng")
+        self.connection.setText("● Máy chủ nội bộ đã dừng — đang đóng ứng dụng")
         self.close()
 
     def realtime_error(self, message):
@@ -184,8 +184,8 @@ class SessionLifecycleMixin:
             if (
                 QMessageBox.question(
                     self,
-                    "Không kết nối được Server",
-                    f"Không thể thu hồi phiên trên Server: {exc}\nVẫn đăng xuất?",
+                    "Không thể kết nối",
+                    f"{exc}\nVẫn đăng xuất?",
                 )
                 != QMessageBox.Yes
             ):

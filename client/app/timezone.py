@@ -5,7 +5,7 @@ prevents the Windows timezone of an individual workstation from changing dates
 or times shown by the application.
 """
 
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 APP_TIMEZONE_NAME = "Asia/Ho_Chi_Minh"
@@ -26,6 +26,26 @@ def local_today() -> date:
     """Return today's business date in UTC+7."""
 
     return local_now().date()
+
+
+def assignment_checkin_window_open(
+    assignment: dict, now: datetime | None = None
+) -> bool:
+    """Return whether the current time falls within the assigned shift."""
+
+    try:
+        work_date = date.fromisoformat(str(assignment["work_date"]))
+        shift_start_time = time.fromisoformat(str(assignment["shift_start_time"]))
+        shift_end_time = time.fromisoformat(str(assignment["shift_end_time"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+
+    shift_start = datetime.combine(work_date, shift_start_time).replace(tzinfo=APP_TIMEZONE)
+    shift_end = datetime.combine(work_date, shift_end_time).replace(tzinfo=APP_TIMEZONE)
+    if shift_end <= shift_start:
+        shift_end += timedelta(days=1)
+    current_time = (now or local_now()).astimezone(APP_TIMEZONE)
+    return shift_start <= current_time <= shift_end
 
 
 def to_local_datetime(value: datetime | str | None) -> datetime | None:

@@ -31,6 +31,7 @@ class TokenResponse(BaseModel):
     role: str
     user_id: int
     employee_id: int | None
+    is_root_admin: bool = False
 
 
 class PasswordChange(BaseModel):

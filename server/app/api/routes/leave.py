@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.common import (
@@ -279,7 +279,7 @@ async def review_leave(leave_id: int, payload: ReviewIn, db: Db, reviewer: Manag
     if payload.approve:
         leave_type = db.get(LeaveType, item.leave_type_id)
         if leave_type.deduct_balance:
-            balances: list[tuple[LeaveBalance, Decimal]] = []
+            required_by_year: dict[int, Decimal] = {}
             for year, required_days in business_days_by_year(
                 item.start_date, item.end_date
             ).items():
@@ -290,13 +290,29 @@ async def review_leave(leave_id: int, payload: ReviewIn, db: Db, reviewer: Manag
                         LeaveBalance.leave_type_id == item.leave_type_id,
                         LeaveBalance.year == year,
                     )
-                    .with_for_update()
                 )
                 if not balance or balance.allocated_days - balance.used_days < required_days:
                     raise HTTPException(409, f"Số ngày phép còn lại của năm {year} không đủ")
-                balances.append((balance, required_days))
-            for balance, required_days in balances:
-                balance.used_days += required_days
+                required_by_year[year] = required_days
+            for year, required_days in required_by_year.items():
+                affected = db.execute(
+                    update(LeaveBalance)
+                    .where(
+                        LeaveBalance.employee_id == item.employee_id,
+                        LeaveBalance.leave_type_id == item.leave_type_id,
+                        LeaveBalance.year == year,
+                        LeaveBalance.allocated_days
+                        - LeaveBalance.used_days
+                        >= required_days,
+                    )
+                    .values(used_days=LeaveBalance.used_days + required_days)
+                ).rowcount
+                if affected != 1:
+                    db.rollback()
+                    raise HTTPException(
+                        409,
+                        f"Số ngày phép còn lại của năm {year} không đủ",
+                    )
         item.status = RequestStatus.APPROVED
     else:
         item.status = RequestStatus.REJECTED

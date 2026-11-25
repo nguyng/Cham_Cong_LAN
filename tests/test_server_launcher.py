@@ -29,13 +29,15 @@ def test_launcher_migrates_a_new_sqlite_database():
         employee_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(employees)")
         }
+        user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
         revision = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert "users" in tables
     assert "attendance_records" in tables
     assert "check_in_geofence_distance_meters" in attendance_columns
     assert "overtime_status" in attendance_columns
     assert "overtime_multiplier" in employee_columns
-    assert revision == "20261113_0006"
+    assert "is_root_admin" in user_columns
+    assert revision == "20261117_0008"
 
 
 def test_launcher_migrates_legacy_device_uniqueness_without_data_loss():
@@ -82,7 +84,40 @@ def test_launcher_migrates_legacy_device_uniqueness_without_data_loss():
         count = connection.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
     assert count == 2
-    assert revision == "20261113_0006"
+    assert revision == "20261117_0008"
+
+
+def test_launcher_repairs_database_already_marked_at_root_admin_revision():
+    database = Path(".test-runtime") / f"root-admin-repair-{uuid4()}" / "attendance.db"
+    database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                role_id INTEGER NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT 1
+            );
+            CREATE TABLE alembic_version (
+                version_num VARCHAR(32) NOT NULL PRIMARY KEY
+            );
+            INSERT INTO roles VALUES (1, 'ADMIN');
+            INSERT INTO users VALUES (1, 'admin', 1, 0);
+            INSERT INTO alembic_version VALUES ('20261117_0007');
+            """
+        )
+
+    run_migrations(f"sqlite:///{database.as_posix()}")
+
+    with sqlite3.connect(database) as connection:
+        user = connection.execute(
+            "SELECT is_root_admin, active FROM users WHERE username = 'admin'"
+        ).fetchone()
+        revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+    assert user == (1, 1)
+    assert revision == "20261117_0008"
 
 
 def test_packaged_bootstrap_creates_admin_without_plaintext_password():

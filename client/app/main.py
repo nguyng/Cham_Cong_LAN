@@ -24,12 +24,10 @@ def install_exception_handler(application: QApplication):
                 dialog = QMessageBox()
                 dialog.setIcon(QMessageBox.Critical)
                 dialog.setWindowTitle("Lỗi chương trình")
-                dialog.setText("Chương trình gặp lỗi ngoài dự kiến nhưng vẫn đang được giữ mở.")
+                dialog.setText("Chương trình gặp sự cố.")
                 dialog.setInformativeText(
-                    "Vui lòng chụp lại cảnh báo này và thử thao tác lại. "
-                    "Nếu lỗi tiếp tục xảy ra, hãy kiểm tra cửa sổ Server."
+                    "Vui lòng thử lại. Nếu sự cố tiếp diễn, hãy liên hệ quản lý."
                 )
-                dialog.setDetailedText(details)
                 dialog.exec()
         except Exception:
             original_hook(exc_type, exc_value, exc_traceback)
@@ -77,12 +75,11 @@ def main(admin_only: bool = False):
     )
     try:
         api = ApiClient(root / "config.json")
-    except (ApiError, OSError, ValueError) as exc:
+    except (ApiError, OSError, ValueError):
         QMessageBox.critical(
             None,
             "Không thể khởi động chương trình",
-            f"Không tải được cấu hình kết nối:\n{exc}\n\n"
-            "Hãy kiểm tra config.json hoặc khôi phục từ config.example.json.",
+            "Không thể khởi động ứng dụng. Hãy kiểm tra cấu hình kết nối.",
         )
         return 1
     application.aboutToQuit.connect(api.close)
@@ -118,9 +115,9 @@ def main(admin_only: bool = False):
             logout_warning = ""
             try:
                 api.request("POST", "/api/v1/auth/logout")
-            except ApiError as exc:
+            except ApiError:
                 # The local session must still be cleared when the Server disconnects.
-                logout_warning = f"\n\nKhông thể thu hồi phiên trên Server: {exc}"
+                logout_warning = "\n\nKhông thể kết nối để kết thúc phiên."
             QMessageBox.critical(
                 None,
                 "Từ chối truy cập",

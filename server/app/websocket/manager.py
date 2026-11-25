@@ -7,16 +7,19 @@ from fastapi import WebSocket
 class ConnectionManager:
     def __init__(self):
         self._connections: dict[int, set[WebSocket]] = defaultdict(set)
+        self._connection_ips: dict[WebSocket, str] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, user_id: int, socket: WebSocket):
+    async def connect(self, user_id: int, socket: WebSocket, client_ip: str):
         await socket.accept()
         async with self._lock:
             self._connections[user_id].add(socket)
+            self._connection_ips[socket] = client_ip
 
     async def disconnect(self, user_id: int, socket: WebSocket):
         async with self._lock:
             self._connections[user_id].discard(socket)
+            self._connection_ips.pop(socket, None)
             if not self._connections[user_id]:
                 self._connections.pop(user_id, None)
 
@@ -40,6 +43,19 @@ class ConnectionManager:
     def connection_counts(self) -> dict[int, int]:
         return {
             user_id: len(sockets)
+            for user_id, sockets in sorted(self._connections.items())
+            if sockets
+        }
+
+    def connection_ips(self) -> dict[int, list[str]]:
+        return {
+            user_id: sorted(
+                {
+                    self._connection_ips[socket]
+                    for socket in sockets
+                    if socket in self._connection_ips
+                }
+            )
             for user_id, sockets in sorted(self._connections.items())
             if sockets
         }

@@ -121,6 +121,7 @@ class User(Base, TimestampMixin):
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), unique=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_root_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

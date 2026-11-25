@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 
 from PySide6.QtCharts import (
     QBarCategoryAxis,
@@ -62,7 +63,7 @@ from app.ui.catalog import (
     STATUS_TEXT,
     TABLE_COLUMNS,
 )
-from app.ui.dialogs import Field, FormDialog
+from app.ui.dialogs import CalendarDateEdit, Field, FormDialog
 from app.ui.excel_export import styled_workbook_bytes
 from app.ui.icons import decorate_button
 from app.ui.leave_portal import LeavePortalMixin
@@ -427,7 +428,7 @@ class MainWindow(
             action_box.addWidget(QLabel("Ghi nhận thời gian làm việc", objectName="sectionTitle"))
             action_box.addWidget(
                 QLabel(
-                    "Chọn thao tác phù hợp. Thời gian lấy từ Server và vị trí lấy từ GPS của máy.",
+                    "Chọn thao tác phù hợp. Thời gian lấy từ máy chủ và vị trí lấy từ GPS của máy.",
                     objectName="subtitle",
                 )
             )
@@ -636,6 +637,8 @@ class MainWindow(
             lambda _=False, t=table, e=endpoint: self.change_table_page(t, e, 1)
         )
         layout.addLayout(pagination_bar)
+        if name in ("Phân ca", "Lịch làm việc"):
+            self.add_weekly_shift_table(layout)
         QTimer.singleShot(100, lambda t=table, e=endpoint: self.load_table(t, e))
         return page
 
@@ -692,6 +695,172 @@ class MainWindow(
         layout.addWidget(quick_card)
         layout.addStretch()
 
+    def add_weekly_shift_table(self, layout):
+        today = local_today()
+        week_start = today - timedelta(days=today.weekday())
+        self.weekly_shift_week_start = week_start
+
+        card = QFrame(objectName="card")
+        card.setProperty("tone", "violet")
+        self.add_shadow(card, blur=20, y_offset=5, alpha=24)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 16)
+        card_layout.setSpacing(10)
+
+        title_row = QHBoxLayout()
+        title_row.addWidget(QLabel("Lịch ca theo tuần", objectName="sectionTitle"))
+        title_row.addStretch()
+        previous = QPushButton("‹ Tuần trước")
+        previous.setProperty("secondary", True)
+        next_week = QPushButton("Tuần sau ›")
+        next_week.setProperty("secondary", True)
+        self.weekly_shift_label = QLabel(objectName="subtitle")
+        title_row.addWidget(previous)
+        title_row.addWidget(self.weekly_shift_label)
+        title_row.addWidget(next_week)
+        card_layout.addLayout(title_row)
+
+        table = QTableWidget()
+        table.setObjectName("weeklyShiftTable")
+        table.setProperty("page_name", "Lịch ca theo tuần")
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.setSelectionMode(QAbstractItemView.NoSelection)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setShowGrid(True)
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.setMinimumHeight(210)
+        table.setMaximumHeight(360)
+        table.setRowCount(0)
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels(
+            ["Nhân viên", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm",
+             "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
+        )
+        card_layout.addWidget(table)
+        layout.addWidget(card)
+
+        self.weekly_shift_table = table
+        previous.clicked.connect(lambda _=False: self.change_weekly_shift_week(-7))
+        next_week.clicked.connect(lambda _=False: self.change_weekly_shift_week(7))
+        QTimer.singleShot(150, self.refresh_weekly_shift_table)
+
+    def change_weekly_shift_week(self, offset_days):
+        self.weekly_shift_week_start += timedelta(days=offset_days)
+        self.refresh_weekly_shift_table()
+
+    def show_week_containing(self, work_date):
+        week_start = work_date - timedelta(days=work_date.weekday())
+        self.weekly_shift_week_start = week_start
+        self.refresh_weekly_shift_table()
+
+    def refresh_weekly_shift_table(self):
+        table = getattr(self, "weekly_shift_table", None)
+        if table is None:
+            return
+
+        week_start = self.weekly_shift_week_start
+        week_end = week_start + timedelta(days=6)
+        self.weekly_shift_label.setText(
+            f"Tuần {week_start.strftime('%d/%m')}–{week_end.strftime('%d/%m/%Y')}"
+        )
+
+        params = {
+            "start": week_start.isoformat(),
+            "end": week_end.isoformat(),
+            "page": 1,
+            "page_size": 200,
+        }
+        if self.employee_portal:
+            params["mine"] = True
+        try:
+            first_page = self.api.request(
+                "GET", "/api/v1/shift-assignments", params=params
+            )
+            if isinstance(first_page, dict):
+                items = list(first_page.get("items", []))
+                pages = int(first_page.get("pagination", {}).get("pages", 1))
+            else:
+                items = list(first_page if isinstance(first_page, list) else [])
+                pages = 1
+            for page_number in range(2, pages + 1):
+                page_params = dict(params)
+                page_params["page"] = page_number
+                page_data = self.api.request(
+                    "GET", "/api/v1/shift-assignments", params=page_params
+                )
+                if isinstance(page_data, dict):
+                    items.extend(page_data.get("items", []))
+            data = {"items": items}
+        except ApiError:
+            table.clearSpans()
+            table.setRowCount(1)
+            table.setItem(0, 0, QTableWidgetItem("Không tải được lịch"))
+            table.setSpan(0, 0, 1, 8)
+            return
+
+        items = (
+            data.get("items", [])
+            if isinstance(data, dict)
+            else data if isinstance(data, list)
+            else []
+        )
+        assignments = {}
+        for item in items:
+            work_date = str(item.get("work_date") or "")
+            if not work_date:
+                continue
+            employee_id = item.get("employee_id")
+            if self.employee_portal:
+                employee_key = "me"
+                employee_label = "Ca của tôi"
+            else:
+                employee_key = str(employee_id)
+                employee_label = (
+                    f"{item.get('employee_code') or ''} — "
+                    f"{item.get('full_name') or 'Nhân viên'}"
+                ).strip(" —")
+            entry = assignments.setdefault(
+                employee_key,
+                {"label": employee_label, "days": {}},
+            )
+            day_index = (date.fromisoformat(work_date) - week_start).days
+            if 0 <= day_index < 7:
+                shift_name = item.get("shift_name") or "Ca làm"
+                shift_time = (
+                    f"{item.get('shift_start_time') or '--'}"
+                    f"–{item.get('shift_end_time') or '--'}"
+                )
+                entry["days"][day_index] = f"{shift_name}\n{shift_time}"
+
+        if not assignments:
+            table.clearSpans()
+            table.setRowCount(1)
+            table.setColumnCount(8)
+            table.setHorizontalHeaderLabels(
+                ["Nhân viên", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm",
+                 "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
+            )
+            table.setItem(0, 0, QTableWidgetItem("Không có ca trong tuần"))
+            table.setSpan(0, 0, 1, 8)
+            return
+
+        table.clearSpans()
+        table.setRowCount(len(assignments))
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels(
+            ["Nhân viên", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm",
+             "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
+        )
+        for row, entry in enumerate(assignments.values()):
+            table.setItem(row, 0, QTableWidgetItem(entry["label"]))
+            for day_index in range(7):
+                text = entry["days"].get(day_index, "Nghỉ")
+                table.setItem(row, day_index + 1, QTableWidgetItem(text))
+            table.setRowHeight(row, 54)
+
 
     def add_page_filters(self, name, table, controls):
         filters = {}
@@ -722,11 +891,20 @@ class MainWindow(
             "Quản lý chấm công",
             "Báo cáo",
         ):
-            start = QDateEdit(calendarPopup=True)
+            accent = "#0F766E" if self.admin_only else "#4F46E5"
+            start = CalendarDateEdit(accent)
             start.setDisplayFormat("dd/MM/yyyy")
+            start.setFixedWidth(150)
+            start.setToolTip("Chọn từ ngày bằng lịch")
+            start.calendarWidget().setFirstDayOfWeek(Qt.Monday)
+            start.calendarWidget().setGridVisible(True)
             start.setDate(_local_qdate().addMonths(-1))
-            end = QDateEdit(calendarPopup=True)
+            end = CalendarDateEdit(accent)
             end.setDisplayFormat("dd/MM/yyyy")
+            end.setFixedWidth(150)
+            end.setToolTip("Chọn đến ngày bằng lịch")
+            end.calendarWidget().setFirstDayOfWeek(Qt.Monday)
+            end.calendarWidget().setGridVisible(True)
             end.setDate(_local_qdate())
             controls.addWidget(QLabel("Từ"))
             controls.addWidget(start)
@@ -811,6 +989,9 @@ class MainWindow(
             state["page"] = 1
         table.clearSelection()
         self.load_table(table, endpoint)
+        page_name = table.property("page_name")
+        if page_name in ("Phân ca", "Lịch làm việc"):
+            self.refresh_weekly_shift_table()
         self.show_toast("Đã đặt lại bộ lọc và tải dữ liệu mới nhất.")
 
     @staticmethod
@@ -990,9 +1171,15 @@ class MainWindow(
                 ("Xóa", lambda: self.delete_record(table, "random-checks")),
             ],
             "Tài khoản": [
-                ("Đổi vai trò", lambda: self.change_role(table)),
-                ("Mở khóa", lambda: self.unlock_user(table)),
-                ("Xóa", lambda: self.delete_record(table, "users")),
+                *(
+                    [
+                        ("Đổi vai trò", lambda: self.change_role(table)),
+                        ("Mở khóa", lambda: self.unlock_user(table)),
+                        ("Xóa", lambda: self.delete_record(table, "users")),
+                    ]
+                    if getattr(self.api, "is_root_admin", False)
+                    else []
+                ),
             ],
             "Cấu hình hệ thống": [
                 ("Cập nhật", lambda: self.update_setting(table)),
@@ -1439,8 +1626,8 @@ class MainWindow(
             return
         message = (
             "Xóa bản ghi đã chọn?\n\n"
-            "Dữ liệu danh mục, nhân viên và tài khoản sẽ được ngừng hoạt động "
-            "để giữ lịch sử. Thiết bị và các bản ghi nghiệp vụ khác sẽ bị xóa vĩnh viễn."
+            "Bản ghi sẽ bị xóa vĩnh viễn. Dữ liệu phụ thuộc bắt buộc cũng bị xóa; "
+            "các liên kết tùy chọn sẽ được gỡ."
         )
         if QMessageBox.question(self, "Xác nhận xóa", message) != QMessageBox.Yes:
             return
@@ -1452,6 +1639,8 @@ class MainWindow(
             )
             self.show_toast("Đã xử lý xóa bản ghi.")
             self.load_table(table, self.endpoint_for(table.property("page_name")))
+            if resource == "shift-assignments":
+                self.refresh_weekly_shift_table()
         except ApiError as exc:
             QMessageBox.warning(self, "Không thể xóa", str(exc))
 
@@ -1476,19 +1665,183 @@ class MainWindow(
                 "employee_id",
                 "Nhân viên",
                 "choice",
-                options=[(f"{x['employee_code']} — {x['full_name']}", x["id"]) for x in employees],
+                options=[
+                    (f"{x['employee_code']} — {x['full_name']} — {x['department_name']}" if x.get("department_name") else f"{x['employee_code']} — {x['full_name']}", x["id"])
+                    for x in employees
+                ],
             ),
-            Field("shift_id", "Ca", "choice", options=[(x["name"], x["id"]) for x in shifts]),
+            Field(
+                "shift_id",
+                "Ca làm",
+                "choice",
+                options=[
+                    (
+                        f"{x['name']} ({str(x['start_time'])[:5]}–{str(x['end_time'])[:5]})",
+                        x["id"],
+                    )
+                    for x in shifts
+                ],
+            ),
             Field("start_date", "Từ ngày", "date"),
             Field("end_date", "Đến ngày", "date"),
             Field("weekdays", "Ngày áp dụng", "weekdays", [0, 1, 2, 3, 4]),
         ]
         dialog = FormDialog("Phân ca", fields, self)
+        dialog.setMinimumWidth(720)
+        employee_widget = dialog.widgets["employee_id"]
+        shift_widget = dialog.widgets["shift_id"]
+        start_widget = dialog.widgets["start_date"]
+        end_widget = dialog.widgets["end_date"]
+        weekday_widget = dialog.widgets["weekdays"]
+        start_widget.setMinimumWidth(220)
+        end_widget.setMinimumWidth(220)
+        preassigned = {}
+
+        def load_employee_assignments():
+            nonlocal preassigned
+            employee_id = employee_widget.currentData()
+            if employee_id is None:
+                preassigned = {}
+                update_preview()
+                return
+            try:
+                data = self.api.request(
+                    "GET",
+                    "/api/v1/shift-assignments",
+                    params={
+                        "employee_id": employee_id,
+                        "start": "2020-01-01",
+                        "end": "2100-12-31",
+                        "page": 1,
+                        "page_size": 200,
+                    },
+                )
+                rows = data.get("items", []) if isinstance(data, dict) else data
+                preassigned = {
+                    str(row.get("work_date")): row
+                    for row in (rows if isinstance(rows, list) else [])
+                    if isinstance(row, dict)
+                }
+            except ApiError:
+                preassigned = {}
+            update_preview()
+
+        preview = QLabel("Chọn khoảng ngày để xem các ngày được phân ca.")
+        preview.setObjectName("subtitle")
+        preview.setWordWrap(True)
+
+        quick_layout = QHBoxLayout()
+        quick_layout.setSpacing(8)
+
+        def set_dates(start, end):
+            start_widget.setDate(QDate(start.year, start.month, start.day))
+            end_widget.setDate(QDate(end.year, end.month, end.day))
+            update_preview()
+
+        today = local_today()
+        week_start = today - timedelta(days=today.weekday())
+        presets = (
+            ("Hôm nay", lambda: set_dates(today, today)),
+            ("Tuần này", lambda: set_dates(week_start, week_start + timedelta(days=6))),
+            ("Tuần sau", lambda: set_dates(
+                week_start + timedelta(days=7),
+                week_start + timedelta(days=13),
+            )),
+            ("30 ngày", lambda: set_dates(today, today + timedelta(days=29))),
+        )
+        for label, handler in presets:
+            button = QPushButton(label)
+            button.setProperty("secondary", True)
+            button.clicked.connect(lambda _=False, action=handler: action())
+            quick_layout.addWidget(button)
+        quick_layout.addStretch()
+
+        def update_preview():
+            values = dialog.values()
+            start_value = date.fromisoformat(values["start_date"])
+            end_value = date.fromisoformat(values["end_date"])
+            if end_value < start_value:
+                preview.setText("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.")
+                dialog.ok_button.setEnabled(False)
+                return
+            weekdays = set(values["weekdays"])
+            matched = [
+                start_value + timedelta(days=offset)
+                for offset in range((end_value - start_value).days + 1)
+                if (start_value + timedelta(days=offset)).weekday() in weekdays
+            ]
+            selected_shift_id = shift_widget.currentData()
+            conflicts = []
+            same_shift_dates = []
+            for work_date in matched:
+                existing = preassigned.get(work_date.isoformat())
+                if not existing:
+                    continue
+                if existing.get("shift_id") == selected_shift_id:
+                    same_shift_dates.append(work_date)
+                else:
+                    conflicts.append(work_date)
+            dialog.ok_button.setEnabled(not conflicts)
+            if conflicts:
+                conflict_text = ", ".join(
+                    work_date.strftime("%d/%m/%Y") for work_date in conflicts[:5]
+                )
+                if len(conflicts) > 5:
+                    conflict_text += f" và {len(conflicts) - 5} ngày khác"
+                preview.setText(
+                    f"Trùng lịch: {conflict_text}. "
+                    "Hãy bỏ các ngày trùng hoặc chọn nhân viên/ca khác."
+                )
+                return
+            free_dates = len(matched) - len(same_shift_dates)
+            dialog.ok_button.setEnabled(free_dates > 0)
+            preview.setText(
+                f"Dự kiến phân ca: {free_dates} ngày mới"
+                + (f", {len(same_shift_dates)} ngày đã giống ca" if same_shift_dates else "")
+                + f" (từ {start_value.strftime('%d/%m/%Y')} đến {end_value.strftime('%d/%m/%Y')})."
+            )
+
+        start_widget.dateChanged.connect(lambda _value: update_preview())
+        end_widget.dateChanged.connect(lambda _value: update_preview())
+        employee_widget.currentIndexChanged.connect(lambda _index: load_employee_assignments())
+        shift_widget.currentIndexChanged.connect(lambda _index: update_preview())
+        for box in weekday_widget.property("weekday_boxes"):
+            box.toggled.connect(lambda _checked=False: update_preview())
+
+        dialog.layout().insertLayout(1, quick_layout)
+        dialog.layout().insertWidget(2, preview)
+        load_employee_assignments()
         if dialog.exec() == FormDialog.Accepted:
             values = dialog.values()
             try:
                 self.api.request("POST", "/api/v1/shift-assignments", json=values)
+                assigned_start = date.fromisoformat(values["start_date"])
+                assigned_end = date.fromisoformat(values["end_date"])
+                for key, widget in self.table_filters.get(table, {}).items():
+                    if key == "start" and isinstance(widget, QDateEdit):
+                        widget.setDate(
+                            QDate(
+                                assigned_start.year,
+                                assigned_start.month,
+                                assigned_start.day,
+                            )
+                        )
+                    elif key == "end" and isinstance(widget, QDateEdit):
+                        widget.setDate(
+                            QDate(
+                                assigned_end.year,
+                                assigned_end.month,
+                                assigned_end.day,
+                            )
+                        )
+                state = self.table_pagination.get(table)
+                if state:
+                    state["page"] = 1
                 self.load_table(table, "/api/v1/shift-assignments")
+                self.show_week_containing(assigned_start)
+                self.show_toast(
+                    f"Đã phân ca từ {assigned_start.strftime('%d/%m/%Y')}."
+                )
             except ApiError as exc:
                 QMessageBox.warning(self, "Không phân ca được", str(exc))
 
@@ -1564,19 +1917,14 @@ class MainWindow(
         message = (
             f"Xóa thiết bị {row.get('device_name') or '#' + str(row['id'])} của "
             f"{row.get('full_name') or 'nhân viên này'}?\n\n"
-            "Thiết bị sẽ bị thu hồi quyền chấm công. Nếu đã có lịch sử chấm công, "
-            "hệ thống sẽ lưu trữ thiết bị thay vì xóa lịch sử."
+            "Thiết bị sẽ bị xóa vĩnh viễn. Lịch sử chấm công được giữ lại nhưng sẽ "
+            "không còn liên kết với thiết bị này."
         )
         if QMessageBox.question(self, "Xóa thiết bị cũ", message) != QMessageBox.Yes:
             return
         try:
-            result = self.api.request("DELETE", f"/api/v1/devices/{row['id']}")
-            notice = (
-                "Đã lưu trữ và thu hồi thiết bị cũ."
-                if result.get("archived")
-                else "Đã xóa thiết bị cũ."
-            )
-            self.show_toast(notice)
+            self.api.request("DELETE", f"/api/v1/devices/{row['id']}")
+            self.show_toast("Đã xóa thiết bị cũ.")
             self.load_table(table, "/api/v1/devices")
         except ApiError as exc:
             QMessageBox.warning(self, "Không xóa được thiết bị", str(exc))
@@ -1736,7 +2084,11 @@ class MainWindow(
                 )
                 self.load_table(table, "/api/v1/settings")
             except (ValueError, ApiError) as exc:
-                QMessageBox.warning(self, "Cấu hình không hợp lệ", str(exc))
+                QMessageBox.warning(
+                    self,
+                    "Cấu hình không hợp lệ",
+                    str(exc) if isinstance(exc, ApiError) else "Giá trị cấu hình không hợp lệ.",
+                )
 
     def create_backup(self):
         try:
@@ -1752,7 +2104,7 @@ class MainWindow(
             QMessageBox.warning(self, "Không tải được backup", str(exc))
             return
         if not backups:
-            QMessageBox.information(self, "Khôi phục", "Chưa có bản sao lưu nào trên Server.")
+            QMessageBox.information(self, "Khôi phục", "Chưa có bản sao lưu nào.")
             return
         fields = [
             Field(
@@ -1815,7 +2167,12 @@ class MainWindow(
             write_bytes_atomic(path, content)
             self.show_toast(f"Đã xuất báo cáo: {path}")
         except (OSError, ApiError) as exc:
-            QMessageBox.warning(self, "Không xuất được báo cáo", str(exc))
+            message = (
+                str(exc)
+                if isinstance(exc, ApiError)
+                else "Không lưu được báo cáo. Hãy kiểm tra thư mục đích."
+            )
+            QMessageBox.warning(self, "Không xuất được báo cáo", message)
 
     def export_table_excel(self, table):
         if table.rowCount() == 0 or table.columnCount() == 0:
@@ -1852,5 +2209,9 @@ class MainWindow(
             content = styled_workbook_bytes(page_name, headers, rows)
             write_bytes_atomic(path, content)
             self.show_toast(f"Đã xuất dữ liệu: {path}")
-        except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Không xuất được file", str(exc))
+        except (OSError, ValueError):
+            QMessageBox.warning(
+                self,
+                "Không xuất được dữ liệu",
+                "Không thể lưu dữ liệu. Hãy kiểm tra thư mục đích.",
+            )

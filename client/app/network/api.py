@@ -19,44 +19,42 @@ class ApiError(RuntimeError):
         self.status_code = status_code
 
 
-VALIDATION_MESSAGES = {
-    "missing": "không được để trống",
-    "string_too_short": "quá ngắn",
-    "string_too_long": "quá dài",
-    "greater_than_equal": "nhỏ hơn giá trị cho phép",
-    "less_than_equal": "lớn hơn giá trị cho phép",
-    "date_from_datetime_parsing": "không đúng định dạng ngày",
-    "time_parsing": "không đúng định dạng giờ",
-    "int_parsing": "phải là số nguyên",
-    "float_parsing": "phải là số",
-    "bool_parsing": "phải là đúng hoặc sai",
-    "literal_error": "không thuộc danh sách được phép",
+RESPONSE_ERROR_MESSAGES = {
+    "Tên đăng nhập hoặc mật khẩu không đúng": "Tên đăng nhập hoặc mật khẩu chưa đúng.",
+    "Thiết bị chưa được quản trị viên phê duyệt": "Thiết bị chưa được duyệt. Hãy liên hệ quản lý.",
+    "Chỉ được check-in trong giờ của ca làm đã phân": "Chỉ check-in trong giờ ca đã phân.",
+    "Ca này đã được check-in": "Ca này đã được check-in rồi.",
+    "Không có ca đang mở để check-out": "Bạn chưa có ca đang làm để check-out.",
+    "Giờ check-out phải sau giờ check-in": "Giờ ra phải sau giờ vào.",
+    "Không có ca làm phù hợp tại thời điểm hiện tại": "Hiện không có ca làm phù hợp.",
+    "Server yêu cầu tọa độ GPS; chức năng dự phòng bằng IP nội bộ đang bị tắt": (
+        "Không xác định được vị trí. Hãy bật quyền vị trí."
+    ),
+}
+
+STATUS_ERROR_MESSAGES = {
+    400: "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.",
+    401: "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",
+    403: "Bạn không có quyền thực hiện thao tác này.",
+    404: "Không tìm thấy dữ liệu.",
+    409: "Không thể thực hiện lúc này. Vui lòng tải lại và thử lại.",
+    410: "Yêu cầu đã hết hạn. Vui lòng thử lại.",
+    422: "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.",
+    423: "Tài khoản đang tạm khóa.",
+    429: "Bạn thao tác quá nhanh. Vui lòng thử lại sau.",
 }
 
 
 def _server_url(value: object) -> str:
     if not isinstance(value, str):
-        raise ApiError("Tệp config.json thiếu địa chỉ server_url.")
+        raise ApiError("Thiếu địa chỉ máy chủ.")
     try:
         parsed = httpx.URL(value.strip())
     except (TypeError, httpx.InvalidURL) as exc:
-        raise ApiError("server_url trong config.json không phải địa chỉ hợp lệ.") from exc
+        raise ApiError("Địa chỉ máy chủ không hợp lệ.") from exc
     if parsed.scheme not in ("http", "https") or not parsed.host:
-        raise ApiError("server_url trong config.json phải là địa chỉ HTTP/HTTPS có tên máy hoặc IP.")
+        raise ApiError("Địa chỉ máy chủ không hợp lệ.")
     return str(parsed).rstrip("/")
-
-
-def _validation_message(errors: list) -> str:
-    messages = []
-    for error in errors:
-        if not isinstance(error, dict):
-            continue
-        location = error.get("loc", [])
-        field = ".".join(str(part) for part in location if part not in ("body", "query", "path"))
-        error_type = str(error.get("type", ""))
-        message = VALIDATION_MESSAGES.get(error_type, str(error.get("msg", "không hợp lệ")))
-        messages.append(f"{field}: {message}" if field else message)
-    return "Dữ liệu không hợp lệ: " + "; ".join(messages or ["vui lòng kiểm tra lại thông tin"])
 
 
 def _response_error(response: httpx.Response) -> ApiError:
@@ -65,37 +63,38 @@ def _response_error(response: httpx.Response) -> ApiError:
     except ValueError:
         payload = None
     detail = payload.get("detail") if isinstance(payload, dict) else None
-    if isinstance(detail, list):
-        message = _validation_message(detail)
-    elif isinstance(detail, dict):
-        message = str(detail.get("message") or detail.get("error") or detail)
-    elif detail:
-        message = str(detail)
-    else:
-        message = response.text.strip() or "Server không cung cấp nội dung lỗi."
-    prefixes = {
-        400: "Yêu cầu không hợp lệ",
-        401: "Phiên đăng nhập không hợp lệ",
-        403: "Không đủ quyền truy cập",
-        404: "Không tìm thấy dữ liệu",
-        409: "Dữ liệu bị xung đột",
-        410: "Yêu cầu đã hết hạn",
-        422: "Thông tin chưa hợp lệ",
-        423: "Tài khoản đang bị khóa",
-        429: "Thao tác quá thường xuyên",
-    }
-    prefix = prefixes.get(response.status_code, "Lỗi Server" if response.status_code >= 500 else "Lỗi yêu cầu")
-    return ApiError(f"{prefix}: {message}", response.status_code)
-
-
-def _network_error(exc: httpx.HTTPError, action: str = "kết nối Server") -> ApiError:
-    if isinstance(exc, httpx.TimeoutException):
-        return ApiError(f"Server không phản hồi khi {action}. Vui lòng kiểm tra Server và thử lại.")
-    if isinstance(exc, httpx.ConnectError):
-        return ApiError(
-            "Không thể kết nối Server. Hãy kiểm tra Server đang chạy, địa chỉ IP và kết nối LAN."
+    if isinstance(detail, str) and detail in RESPONSE_ERROR_MESSAGES:
+        message = RESPONSE_ERROR_MESSAGES[detail]
+    elif isinstance(detail, str) and detail.startswith("Ngày trùng lịch:"):
+        message = detail
+    elif isinstance(detail, str) and detail == "Các ngày đã được phân ca này rồi":
+        message = "Các ngày này đã được phân ca giống nhau rồi."
+    elif (
+        isinstance(detail, str)
+        and response.status_code < 500
+        and len(detail) <= 300
+        and not any(
+            marker in detail.lower()
+            for marker in ("traceback", "internal server", "exception", "stacktrace")
         )
-    return ApiError(f"Không thể {action}. Vui lòng kiểm tra mạng LAN và thử lại.")
+    ):
+        message = detail
+    elif response.status_code >= 500:
+        message = "Hệ thống đang gặp sự cố. Vui lòng thử lại sau."
+    else:
+        message = STATUS_ERROR_MESSAGES.get(
+            response.status_code,
+            "Không thể hoàn tất thao tác. Vui lòng thử lại.",
+        )
+    return ApiError(message, response.status_code)
+
+
+def _network_error(exc: httpx.HTTPError) -> ApiError:
+    if isinstance(exc, httpx.TimeoutException):
+        return ApiError("Máy chủ không phản hồi. Vui lòng thử lại.")
+    if isinstance(exc, httpx.ConnectError):
+        return ApiError("Không kết nối được máy chủ. Hãy kiểm tra mạng và thử lại.")
+    return ApiError("Kết nối thất bại. Vui lòng thử lại.")
 
 
 class ApiClient:
@@ -105,6 +104,7 @@ class ApiClient:
         self.token: str | None = None
         self.role: str | None = None
         self.employee_id: int | None = None
+        self.is_root_admin = False
         self.device_registration_pending = False
         self._device_fingerprint = machine_fingerprint(config_path)
         self._client = self._make_client()
@@ -120,7 +120,7 @@ class ApiClient:
                 try:
                     config = json.loads(example.read_text(encoding="utf-8"))
                 except (OSError, ValueError) as exc:
-                    raise ApiError(f"Không đọc được cấu hình mẫu: {exc}") from exc
+                    raise ApiError("Không đọc được cấu hình ứng dụng.") from exc
             else:
                 config = {
                     "server_url": "http://127.0.0.1:8000",
@@ -133,11 +133,11 @@ class ApiClient:
             try:
                 config = json.loads(self.config_path.read_text(encoding="utf-8"))
             except OSError as exc:
-                raise ApiError(f"Không đọc được tệp cấu hình: {exc}") from exc
+                raise ApiError("Không đọc được cấu hình ứng dụng.") from exc
             except ValueError as exc:
-                raise ApiError("Tệp config.json không đúng định dạng JSON.") from exc
+                raise ApiError("Cấu hình ứng dụng không hợp lệ.") from exc
         if not isinstance(config, dict):
-            raise ApiError("Tệp config.json thiếu địa chỉ server_url.")
+            raise ApiError("Thiếu địa chỉ máy chủ.")
         config["server_url"] = _server_url(config.get("server_url"))
         try:
             if int(config.get("discovery_port", 37020)) not in range(1, 65536):
@@ -145,11 +145,11 @@ class ApiClient:
             if float(config.get("request_timeout_seconds", 10)) <= 0:
                 raise ValueError
         except (TypeError, ValueError) as exc:
-            raise ApiError("Cổng khám phá hoặc thời gian chờ trong config.json không hợp lệ.") from exc
+            raise ApiError("Thiết lập kết nối không hợp lệ.") from exc
         if not isinstance(config.get("allow_lan_ip_location_fallback", True), bool):
-            raise ApiError("allow_lan_ip_location_fallback trong config.json phải là true hoặc false.")
+            raise ApiError("Thiết lập kết nối không hợp lệ.")
         if not isinstance(config.get("verify_tls", True), bool):
-            raise ApiError("verify_tls trong config.json phải là true hoặc false.")
+            raise ApiError("Thiết lập kết nối không hợp lệ.")
         return config
 
     def _make_client(self) -> httpx.Client:
@@ -207,12 +207,13 @@ class ApiClient:
         try:
             return response.json()
         except ValueError as exc:
-            raise ApiError("Server trả về dữ liệu không đúng định dạng JSON.") from exc
+            raise ApiError("Không đọc được dữ liệu từ máy chủ.") from exc
 
     def clear_session(self):
         self.token = None
         self.role = None
         self.employee_id = None
+        self.is_root_admin = False
         self.device_registration_pending = False
 
     def close(self):
@@ -233,6 +234,7 @@ class ApiClient:
         self.token = data["access_token"]
         self.role = data["role"]
         self.employee_id = data["employee_id"]
+        self.is_root_admin = data.get("is_root_admin", False)
         if not register_device:
             return data
         try:
@@ -278,7 +280,7 @@ class ApiClient:
         try:
             response = self._client.get(path, params=params, headers=headers)
         except httpx.HTTPError as exc:
-            raise _network_error(exc, "tải tệp từ Server") from exc
+            raise _network_error(exc) from exc
         if response.status_code >= 400:
             raise _response_error(response)
         return response.content
@@ -298,7 +300,7 @@ class ApiClient:
             except (TimeoutError, ValueError, KeyError):
                 time.sleep(0.2)
             except OSError as exc:
-                raise ApiError(f"Không thể tìm Server trong mạng LAN: {exc}") from exc
+                raise ApiError("Không tìm được máy chủ trong mạng nội bộ.") from exc
         return None
 
     def set_server(self, url: str):
@@ -310,7 +312,7 @@ class ApiClient:
                 json.dumps(updated_config, ensure_ascii=False, indent=2),
             )
         except OSError as exc:
-            raise ApiError(f"Không thể lưu địa chỉ Server vào config.json: {exc}") from exc
+            raise ApiError("Không lưu được địa chỉ máy chủ.") from exc
         self.config = updated_config
         self._client.close()
         self._client = self._make_client()

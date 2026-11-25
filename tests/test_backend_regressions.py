@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from app.api.deps import require_lan
+from app.api.deps import client_ip, require_lan
 from app.core.config import Settings
 from app.database.session import SessionLocal
 from app.models.entities import (
@@ -45,6 +45,38 @@ def test_invalid_client_ip_is_rejected_as_forbidden():
         require_lan("not-an-ip-address")
 
     assert raised.value.status_code == 403
+
+
+def test_ipv4_mapped_internal_address_is_allowed(monkeypatch):
+    settings = Settings(allowed_networks=["192.168.0.0/16"])
+    monkeypatch.setattr("app.api.deps.get_settings", lambda: settings)
+
+    require_lan("::ffff:192.168.1.25")
+
+
+def test_radmin_network_is_only_allowed_when_configured(monkeypatch):
+    settings = Settings(allowed_networks=["26.0.0.0/8"])
+    monkeypatch.setattr("app.api.deps.get_settings", lambda: settings)
+
+    require_lan("26.167.29.64")
+    with pytest.raises(HTTPException) as raised:
+        require_lan("8.8.8.8")
+    assert raised.value.status_code == 403
+
+
+def test_ipv4_mapped_client_address_is_displayed_as_ipv4():
+    from starlette.requests import Request
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "headers": [],
+            "client": ("::ffff:192.168.1.25", 8000),
+        }
+    )
+
+    assert client_ip(request) == "192.168.1.25"
 
 
 def test_admin_dashboard_counts_system_security_alerts(client, admin_headers):

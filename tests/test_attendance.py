@@ -210,24 +210,18 @@ def test_common_late_threshold_boundary(
         assert record.status == expected_status
 
 
-def test_early_check_in_keeps_actual_time_and_is_not_late():
+def test_check_in_before_shift_is_rejected():
     work_date = date(2029, 1, 9)
     assign_test_shift(work_date=work_date)
     local_check_in = datetime(2029, 1, 9, 7, 45, tzinfo=LOCAL_TIMEZONE)
 
     with SessionLocal.begin() as db:
         employee = db.query(Employee).filter_by(employee_code="NV001").one()
-        record = check_in(
-            db,
-            employee,
-            "192.168.1.20",
-            None,
-            local_check_in.astimezone(UTC),
-        )
+        with pytest.raises(HTTPException) as exc:
+            check_in(db, employee, "192.168.1.20", None, local_check_in.astimezone(UTC))
 
-        assert record.check_in_at == local_check_in.astimezone(UTC)
-        assert record.late_minutes == 0
-        assert record.status == AttendanceStatus.OPEN
+        assert exc.value.status_code == 409
+        assert exc.value.detail == "Chỉ được check-in trong giờ của ca làm đã phân"
 
 
 def test_checkout_calculates_worked_minutes_and_admin_api_has_shift_details(
@@ -266,6 +260,18 @@ def test_checkout_calculates_worked_minutes_and_admin_api_has_shift_details(
     assert row["late_minutes"] == 15
     assert row["is_late"] is True
 
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        with pytest.raises(HTTPException) as exc:
+            check_out(
+                db,
+                employee,
+                "192.168.1.20",
+                check_out_at + timedelta(minutes=1),
+            )
+        assert exc.value.status_code == 409
+        assert exc.value.detail == "Không có ca đang mở để check-out"
+
 
 def test_overnight_shift_late_early_calculation():
     with SessionLocal.begin() as db:
@@ -301,6 +307,24 @@ def test_no_assignment_rejected():
         with pytest.raises(HTTPException) as exc:
             check_in(db, employee, "192.168.1.20", None, datetime(2030, 1, 1, 8, tzinfo=UTC))
         assert exc.value.status_code == 409
+        assert exc.value.detail == "Không có ca làm phù hợp tại thời điểm hiện tại"
+
+
+@pytest.mark.parametrize(
+    "local_time",
+    [time(7, 59), time(17, 1)],
+)
+def test_check_in_outside_shift_reports_schedule_exists(local_time: time):
+    work_date = date(2029, 1, 11)
+    assign_test_shift(work_date=work_date)
+    check_in_at = datetime.combine(work_date, local_time, tzinfo=LOCAL_TIMEZONE).astimezone(UTC)
+
+    with SessionLocal.begin() as db:
+        employee = db.query(Employee).filter_by(employee_code="NV001").one()
+        with pytest.raises(HTTPException) as exc:
+            check_in(db, employee, "192.168.1.20", None, check_in_at)
+        assert exc.value.status_code == 409
+        assert exc.value.detail == "Chỉ được check-in trong giờ của ca làm đã phân"
 
 
 def test_checkout_cannot_be_before_checkin():

@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -31,6 +32,8 @@ from app.services import attendance
 from app.services.payroll import payroll_report
 from app.services.reporting import excel_report, pdf_report
 from app.websocket.manager import manager
+
+logger = logging.getLogger(__name__)
 
 
 def report_rows(
@@ -128,7 +131,15 @@ def payroll_summary(
             employee_id=employee_id,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        logger.warning("Invalid payroll report parameters: %s", exc)
+        detail = str(exc)
+        if "năm trong tương lai" in detail:
+            message = "Không thể tính lương cho năm trong tương lai."
+        elif "tháng trong tương lai" in detail:
+            message = "Không thể tính lương cho tháng trong tương lai."
+        else:
+            message = "Kỳ báo cáo không hợp lệ."
+        raise HTTPException(400, message) from None
     if pagination.page is not None:
         items = report["items"]
         total = len(items)

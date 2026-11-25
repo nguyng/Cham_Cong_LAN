@@ -23,6 +23,7 @@ from app.api.common import (
     ensure_employee,
     now_utc,
     protect_admin_continuity,
+    protect_root_admin,
     validate_date_range,
 )
 from app.api.deps import Admin, CurrentUser, Db, Manager, client_ip
@@ -62,7 +63,6 @@ from app.models.entities import (
     Notification,
     Position,
     RandomCheck,
-    RequestStatus,
     Role,
     RoleName,
     SecurityAlert,
@@ -88,6 +88,7 @@ from app.schemas.api import (
 )
 from app.services.backup import backup_database, restore_database
 from app.services.discovery import discovery_server
+from app.services.hard_delete import hard_delete_record
 from app.services.maintenance import cleanup_expired_records
 from app.websocket.manager import manager
 
@@ -113,18 +114,6 @@ ADMIN_REMOVABLE_MODELS = {
     "users": User,
     "settings": SystemSetting,
 }
-
-# Dữ liệu danh mục/tài khoản phải được giữ lại để báo cáo lịch sử không
-# mất liên kết. Nút Xóa sẽ lưu trữ các bản ghi này thay vì xóa vật lý.
-ADMIN_ARCHIVED_RESOURCES = {
-    "employees",
-    "departments",
-    "positions",
-    "shifts",
-    "leave-types",
-    "users",
-}
-
 
 def validate_employee_references(
     db: Session, department_id: int | None, position_id: int | None
@@ -236,9 +225,7 @@ async def unexpected_server_error(request: Request, exc: Exception):
     )
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": f"Server gặp lỗi nội bộ. Mã lỗi: {error_id}. Hãy kiểm tra cửa sổ Server."
-        },
+        content={"detail": "Hệ thống đang gặp sự cố. Vui lòng thử lại sau."},
     )
 
 
@@ -306,6 +293,7 @@ def login(payload: LoginRequest, request: Request, db: Db):
         role=user.role.name.value,
         user_id=user.id,
         employee_id=user.employee_id,
+        is_root_admin=user.is_root_admin,
     )
 
 
@@ -340,15 +328,21 @@ def me(user: CurrentUser):
         "id": user.id,
         "username": user.username,
         "role": user.role.name.value,
+        "is_root_admin": user.is_root_admin,
         "employee": employee_dict(user.employee) if user.employee else None,
     }
 
 
 @auth_router.get("/api/v1/users")
-def list_users(db: Db, admin: Admin, pagination: Page):
+def list_users(db: Db, admin: Admin, pagination: Page, active: bool | None = True):
+    query = select(User)
+    if not admin.is_root_admin:
+        query = query.where(User.is_root_admin.is_(True))
+    if active is not None:
+        query = query.where(User.active.is_(active))
     return paginated(
         db,
-        select(User).order_by(User.username),
+        query.order_by(User.username),
         pagination,
         lambda x: {
             "id": x.id,
@@ -357,6 +351,7 @@ def list_users(db: Db, admin: Admin, pagination: Page):
             "employee_id": x.employee_id,
             "active": x.active,
             "locked_until": x.locked_until,
+            "is_root_admin": x.is_root_admin,
         },
     )
 
@@ -367,6 +362,7 @@ def change_user_role(user_id: int, role: RoleName, request: Request, db: Db, adm
     target_role = db.scalar(select(Role).where(Role.name == role))
     if not item or not target_role:
         raise HTTPException(404, "Không tìm thấy tài khoản hoặc vai trò")
+    protect_root_admin(item, admin)
     if item.role.name != role and item.role.name == RoleName.ADMIN:
         protect_admin_continuity(db, item, admin)
     before = {"role": item.role.name.value}
@@ -386,6 +382,7 @@ def unlock_user(user_id: int, db: Db, admin: Admin):
     item = db.get(User, user_id)
     if not item:
         raise HTTPException(404, "Không tìm thấy tài khoản")
+    protect_root_admin(item, admin)
     item.failed_login_count = 0
     item.locked_until = None
     db.commit()
@@ -541,7 +538,14 @@ def create_employee(payload: EmployeeIn, request: Request, db: Db, admin: Admin)
             employee_id=item.id,
         )
         db.add(user)
-        audit(db, "EMPLOYEE_CREATED", admin, client_ip(request), item, after=employee_data)
+        audit(
+            db,
+            "EMPLOYEE_CREATED",
+            admin,
+            client_ip(request),
+            item,
+            after=payload.model_dump(exclude={"temporary_password"}, mode="json"),
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -586,6 +590,9 @@ def update_employee(
     item = db.get(Employee, employee_id)
     if not item:
         raise HTTPException(404, "Không tìm thấy nhân viên")
+    linked_user = db.scalar(select(User).where(User.employee_id == item.id))
+    if linked_user:
+        protect_root_admin(linked_user, admin)
     validate_employee_references(db, payload.department_id, payload.position_id)
     before = employee_dict(item)
     for key, value in payload.model_dump().items():
@@ -614,6 +621,8 @@ def set_employee_active(employee_id: int, active: bool, request: Request, db: Db
         raise HTTPException(404, "Không tìm thấy nhân viên")
     before = {"active": item.active}
     user = db.scalar(select(User).where(User.employee_id == item.id))
+    if user:
+        protect_root_admin(user, admin)
     if not active:
         open_attendance = db.scalar(
             select(func.count(AttendanceRecord.id)).where(
@@ -710,10 +719,13 @@ def assign_shift(payload: AssignmentIn, db: Db, manager_user: Manager):
     if not shift or not shift.active:
         raise HTTPException(409, "Ca làm không tồn tại hoặc đã ngừng hoạt động")
     results = []
+    conflicts = []
+    planned_dates = []
     for offset in range((payload.end_date - payload.start_date).days + 1):
         work_date = payload.start_date + timedelta(days=offset)
         if work_date.weekday() not in payload.weekdays:
             continue
+        planned_dates.append(work_date)
         existing = db.scalar(
             select(ShiftAssignment).where(
                 ShiftAssignment.employee_id == payload.employee_id,
@@ -721,17 +733,45 @@ def assign_shift(payload: AssignmentIn, db: Db, manager_user: Manager):
             )
         )
         if existing:
-            existing.shift_id = payload.shift_id
-            item = existing
-        else:
-            item = ShiftAssignment(
-                employee_id=payload.employee_id, shift_id=payload.shift_id, work_date=work_date
+            if existing.shift_id != payload.shift_id:
+                conflicts.append(work_date)
+    if not planned_dates:
+        raise HTTPException(400, "Khoảng ngày không chứa thứ làm việc đã chọn")
+    if conflicts:
+        conflict_dates = ", ".join(work_date.strftime("%d/%m/%Y") for work_date in conflicts)
+        raise HTTPException(
+            409,
+            f"Ngày trùng lịch: {conflict_dates}. Hãy bỏ hoặc chọn lại ngày này.",
+        )
+    for work_date in planned_dates:
+        existing = db.scalar(
+            select(ShiftAssignment).where(
+                ShiftAssignment.employee_id == payload.employee_id,
+                ShiftAssignment.work_date == work_date,
             )
-            db.add(item)
+        )
+        if existing:
+            continue
+        db.add(
+            ShiftAssignment(
+                employee_id=payload.employee_id,
+                shift_id=payload.shift_id,
+                work_date=work_date,
+            )
+        )
         results.append(work_date)
     if not results:
+        raise HTTPException(409, "Các ngày đã được phân ca này rồi")
+    if not results:
         raise HTTPException(400, "Khoảng ngày không chứa thứ làm việc đã chọn")
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409,
+            "Lịch của nhân viên đã thay đổi. Vui lòng tải lại và chọn lại ca.",
+        ) from None
     return {"assigned_dates": results, "count": len(results)}
 
 
@@ -923,10 +963,6 @@ def remove_old_device(device_id: int, request: Request, db: Db, reviewer: Manage
         "approved": item.approved,
         "active": item.active,
     }
-    linked_attendance = db.scalar(
-        select(func.count()).select_from(AttendanceRecord).where(AttendanceRecord.device_id == item.id)
-    )
-    archived = bool(linked_attendance)
     audit(
         db,
         "DEVICE_REMOVED",
@@ -934,15 +970,11 @@ def remove_old_device(device_id: int, request: Request, db: Db, reviewer: Manage
         client_ip(request),
         item,
         before=before,
-        after={"approved": False, "active": False, "archived": archived},
+        after={"deleted": True},
     )
-    if archived:
-        item.approved = False
-        item.active = False
-    else:
-        db.delete(item)
+    hard_delete_record(db, item)
     db.commit()
-    return {"id": device_id, "deleted": not archived, "archived": archived}
+    return {"id": device_id, "deleted": True, "archived": False}
 
 
 @organization_router.get("/api/v1/devices/me")
@@ -1197,6 +1229,7 @@ def remove_admin_record(
         raise HTTPException(404, "Không tìm thấy dữ liệu cần xóa")
 
     if isinstance(item, User):
+        protect_root_admin(item, admin)
         if item.id == admin.id:
             raise HTTPException(409, "Không thể xóa tài khoản Admin đang đăng nhập")
         if item.active and item.role.name == RoleName.ADMIN:
@@ -1210,48 +1243,18 @@ def remove_admin_record(
     if isinstance(item, Employee) and item.id == admin.employee_id:
         raise HTTPException(409, "Không thể xóa hồ sơ của Admin đang đăng nhập")
     if isinstance(item, Employee):
-        open_attendance = db.scalar(
-            select(func.count(AttendanceRecord.id)).where(
-                AttendanceRecord.employee_id == item.id,
-                AttendanceRecord.check_out_at.is_(None),
-            )
-        )
-        if open_attendance:
-            raise HTTPException(409, "Nhân viên đang có ca mở; hãy check-out trước khi xóa")
-    if isinstance(item, LeaveRequest) and item.status == RequestStatus.APPROVED:
-        raise HTTPException(409, "Hãy hủy đơn nghỉ đã duyệt trước khi xóa")
-    if isinstance(item, LeaveBalance) and item.used_days:
-        raise HTTPException(409, "Quỹ phép đã phát sinh ngày nghỉ nên không thể xóa")
-
-    archived = resource in ADMIN_ARCHIVED_RESOURCES
+        linked_user = db.scalar(select(User).where(User.employee_id == item.id))
+        if linked_user:
+            protect_root_admin(linked_user, admin)
     before = {"identifier": identifier}
-    if archived:
-        before["active"] = item.active
-        item.active = False
-        if isinstance(item, Employee):
-            linked_user = db.scalar(select(User).where(User.employee_id == item.id))
-            if linked_user:
-                linked_user.active = False
-                db.query(LoginSession).filter(
-                    LoginSession.user_id == linked_user.id,
-                    LoginSession.revoked_at.is_(None),
-                ).update({LoginSession.revoked_at: now_utc()})
-        elif isinstance(item, User):
-            db.query(LoginSession).filter(
-                LoginSession.user_id == item.id,
-                LoginSession.revoked_at.is_(None),
-            ).update({LoginSession.revoked_at: now_utc()})
-    else:
-        db.delete(item)
-
+    hard_delete_record(db, item)
     audit(
         db,
-        "ADMIN_RECORD_ARCHIVED" if archived else "ADMIN_RECORD_DELETED",
+        "ADMIN_RECORD_DELETED",
         admin,
         client_ip(request),
         item,
         before=before,
-        after={"active": False} if archived else None,
     )
     try:
         db.commit()
@@ -1318,6 +1321,7 @@ def audit_logs(
 @admin_router.get("/api/v1/clients")
 def connected_clients(db: Db, admin: Admin, pagination: Page):
     connection_counts = manager.connection_counts()
+    connection_ips = manager.connection_ips()
     if not connection_counts:
         return paginated_rows([], pagination)
     users = db.scalars(
@@ -1330,6 +1334,7 @@ def connected_clients(db: Db, admin: Admin, pagination: Page):
             "role": user.role.name.value,
             "employee_id": user.employee_id,
             "connections": connection_counts[user.id],
+            "ip_addresses": connection_ips.get(user.id, []),
         }
         for user in users
     ]
@@ -1340,8 +1345,9 @@ def connected_clients(db: Db, admin: Admin, pagination: Page):
 def create_backup(request: Request, db: Db, admin: Admin):
     try:
         path = backup_database()
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise HTTPException(500, f"Sao lưu thất bại: {exc}") from exc
+    except (OSError, RuntimeError, ValueError):
+        logger.exception("Database backup failed")
+        raise HTTPException(500, "Không thể tạo bản sao lưu.") from None
     audit(db, "DATABASE_BACKUP", admin, client_ip(request), after={"filename": path.name})
     db.commit()
     return {"filename": path.name, "created_at": now_utc()}
@@ -1372,8 +1378,9 @@ def restore_backup(filename: str, request: Request, db: Db, admin: Admin):
     db.commit()
     try:
         restore_database(Path(settings.backup_directory) / filename)
-    except (OSError, ValueError, RuntimeError) as exc:
-        raise HTTPException(500, f"Khôi phục thất bại: {exc}") from exc
+    except (OSError, ValueError, RuntimeError):
+        logger.exception("Database restore failed")
+        raise HTTPException(500, "Không thể khôi phục dữ liệu.") from None
     return {"status": "restored", "filename": filename}
 
 
@@ -1412,7 +1419,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ):
             await websocket.close(code=4401)
             return
-    await manager.connect(user_id, websocket)
+    await manager.connect(user_id, websocket, client_ip(websocket))
     try:
         await websocket.send_json({"type": "connected", "server_time": now_utc().isoformat()})
         while True:
