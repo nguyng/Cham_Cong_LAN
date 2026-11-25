@@ -1,0 +1,79 @@
+# ========================
+# Spring Boot (Backend)
+# ========================
+target/
+*.jar
+*.war
+*.class
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+spring-boot-*.log
+
+# ========================
+# React / Node (Frontend)
+# ========================
+node_modules/
+dist/
+build/
+dist_portable/
+build_portable/
+build_portable_runtime/
+.env
+.env.local
+.env.production
+
+# ========================
+# IDE & Editor
+# ========================
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ========================
+# Database & Sensitive
+# ========================
+*.sql.backup
+application-prod.properties
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python isolated environment / generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.coverage
+htmlcov/
+.tmp-venv/
+.tmp-exe/
+backups/
+exports/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+server/.env
+client/config.json
+client/device.id
+dist/
+build/
+*.spec
+!packaging/
+!packaging/*.spec
+test_backups/
+.test-runtime/
+
+# Word temporary lock files
+~$*.docx
+* (1).docx
