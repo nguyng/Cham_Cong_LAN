@@ -1,29 +1,78 @@
-# Hệ thống chấm công qua mạng LAN
+# Hệ thống quản lý và chấm công trực tuyến định vị Geofencing thời gian thực — Quán Hawa's Food Đà Nẵng
 
-Hệ thống chấm công nội bộ gồm Server FastAPI, ứng dụng nhân viên và
-ứng dụng quản lý PySide6. Dữ liệu được lưu tập trung bằng SQLite trên máy
-Server; Client không truy cập trực tiếp database.
+> **Học phần**: Mạng máy tính / Lập trình mạng — Khoa Công Nghệ Thông Tin, Trường Đại học Kiến Trúc Đà Nẵng  
+> **Người hướng dẫn khoa học**: TS. Đặng Hùng Vĩ  
+> **Đơn vị ứng dụng thực tế**: Quán Hawa's Food Đà Nẵng  
+> **Nhóm thực hiện**: Huan rose và dong bon (Lớp 23CT1 — Khóa 2023)  
+> **Thành viên nhóm**:
+> 1. Ngô Đức An (Trưởng nhóm - MSSV: 114534) - Phân hệ MOD-01 & An ninh mạng
+> 2. Nguyễn Văn Nguyên (Thành viên - MSSV: 115201) - Phân hệ MOD-02 & CSDL ERD
+> 3. Trần Đức Trí (Thành viên - MSSV: 114889) - Phân hệ MOD-03 & Thuật toán xếp ca
+> 4. Nguyễn Ngọc Thương (Thành viên - MSSV: 115042) - Phân hệ MOD-05 & Đối soát Excel
+> 5. Vũ Huy Hoàng (Thành viên - MSSV: 114776) - Phân hệ MOD-04 & Geofencing / WebSocket
+>
+> **Tài liệu tham chiếu chính thức**:
+> - Báo cáo phân tích hệ thống chi tiết: `BAO_CAO_DO_AN_HAWAS_FOOD_13_SO_DO_HOAN_CHINH.docx` và [phan_tich_du_an_cham_cong.md](phan_tich_du_an_cham_cong.md)
+> - Đặc tả 5 phân hệ kỹ thuật: [Module_ChamCong_LAN.md](Module_ChamCong_LAN.md)
+> - 13 trang sơ đồ kỹ thuật Draw.io: `HAWAS_FOOD_HOAN_CHINH_13_TRANG.drawio`
+
+Hệ thống chấm công trực tuyến gồm Server FastAPI, ứng dụng nhân viên và
+ứng dụng quản lý PySide6 (kèm giao diện Web Mobile chấm công). Dữ liệu được lưu tập trung bằng SQLite trên máy
+Server; Client không truy cập trực tiếp database. Bán kính Geofencing chuẩn $R = 50\,\text{m}$ (Haversine), phát hiện và thông báo tức thời qua WebSocket (< 100ms).
 
 ## Chạy nhanh từ mã nguồn
 
-Mở PowerShell tại đúng thư mục `Cham_Cong_LAN`. Lần đầu tiên, chạy:
+Mở PowerShell tại thư mục `Cham_Cong_LAN`. Nếu đây là lần chạy đầu tiên, cài môi trường bằng:
 
 ```powershell
 .\scripts\setup.ps1
 ```
 
-`setup.ps1` tạo `.venv`, sinh `server/.env` với JWT secret ngẫu nhiên và chỉ nạp năm
-tài khoản mẫu khi database chưa có tài khoản. Script không ghi đè database đang sử dụng.
-
-Mỗi lần sử dụng, chỉ cần một lệnh để mở ba cửa sổ terminal riêng cho Server, Admin và User:
+Sau đó dán nguyên khối lệnh dưới đây để mở ba cửa sổ terminal riêng cho Server, Admin và User:
 
 ```powershell
-.\scripts\run_all.ps1
+if (-not (Test-Path '.\.venv\Scripts\python.exe') -or -not (Test-Path '.\server\.env')) {
+    .\scripts\setup.ps1
+}
+
+$root = (Resolve-Path '.').Path
+$python = (Resolve-Path '.\.venv\Scripts\python.exe').Path
+$safeRoot = $root.Replace("'", "''")
+$safePython = $python.Replace("'", "''")
+
+$serverCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' server_launcher.py"
+$server = Start-Process powershell.exe -PassThru -ArgumentList @('-NoProfile', '-Command', $serverCommand)
+
+$ready = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    if ($server.HasExited) { throw 'Server đã dừng trước khi khởi động xong. Hãy xem lỗi trong cửa sổ Server.' }
+    try {
+        Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 1 | Out-Null
+        $ready = $true
+        break
+    } catch {
+        Start-Sleep -Milliseconds 500
+        $server.Refresh()
+    }
+}
+if (-not $ready) { throw 'Server không sẵn sàng sau 15 giây. Hãy xem lỗi trong cửa sổ Server.' }
+
+$adminCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' admin_launcher.py"
+$userCommand = "Set-Location -LiteralPath '$safeRoot'; & '$safePython' client_launcher.py"
+Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $adminCommand)
+Start-Process powershell.exe -ArgumentList @('-NoProfile', '-Command', $userCommand)
 ```
 
-`run_all.ps1` dùng đúng các entry point nguồn, chờ Server mở cổng rồi mới mở giao diện.
-Một watchdog ẩn theo dõi đúng ba cây tiến trình vừa tạo; khi cửa sổ Server đóng, Admin và
-User cũng được dừng hẳn, kể cả khi đang ở màn hình đăng nhập.
+Không dùng `python -m app.main` trong PowerShell con. `client_launcher.py` tự thiết lập đúng đường dẫn module và luôn mở cổng đăng nhập User; `admin_launcher.py` mở cổng Admin/Manager.
+
+Dừng khẩn cấp các tiến trình Python của riêng dự án khi cần:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -in @('python.exe', 'pythonw.exe') -and
+    $_.CommandLine -match 'server_launcher|admin_launcher|client_launcher'
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
 
 ## Tài khoản mẫu
 
@@ -33,11 +82,6 @@ User cũng được dừng hẳn, kể cả khi đang ở màn hình đăng nh�
 | Manager | `manage` | `123456` |
 | Nhân viên | `user1`, `user2`, `user3` | `123456` |
 
-- `admin` là Admin gốc. Admin được tạo sau chỉ thấy tài khoản `admin` trong mục
-  **Tài khoản** và không thể sửa, mở khóa hoặc xóa tài khoản gốc. Admin gốc quản lý
-  được các tài khoản còn lại.
-- Nút **Xóa** xóa bản ghi khỏi database; dữ liệu phụ thuộc bắt buộc cũng bị xóa,
-  còn liên kết tùy chọn được gỡ. Thao tác không thể hoàn tác.
 - `AttendanceClient`: cổng nhân viên. Tài khoản `manage` đăng nhập tại đây
   chỉ thấy dữ liệu cá nhân.
 - `AttendanceAdmin`: cổng quản lý. Admin quản lý toàn hệ thống; Manager
@@ -50,40 +94,27 @@ User cũng được dừng hẳn, kể cả khi đang ở màn hình đăng nh�
 Lần đầu nhân viên đăng nhập trên một máy, thiết bị sẽ ở trạng thái
 chờ duyệt và chưa thể chấm công.
 
-1. Mở cửa sổ Admin và đăng nhập Admin hoặc Manager.
+1. Mở `AttendanceAdmin.exe` và đăng nhập Admin hoặc Manager.
 2. Chọn chức năng riêng **Phê duyệt thiết bị** trên thanh điều hướng.
 3. Chọn đúng nhân viên/tên máy, sau đó nhấn **Phê duyệt**.
 4. Quay lại Client và chấm công lại.
 
 ## Chức năng chính
 
-- Toàn bộ nghiệp vụ và hiển thị thời gian dùng UTC+7 (`Asia/Ho_Chi_Minh`). Check-in
-  chỉ được thực hiện trong giờ của ca đã phân; check-in muộn từ phút 15 sẽ cảnh báo.
-  Mỗi ca chỉ có một lần check-in và một lần check-out; giờ vào, giờ ra và tổng phút
-  làm được lưu trong cơ sở dữ liệu, rồi hiển thị thành giờ/phút. Check-out sau giờ
-  kết thúc ca vẫn được ghi nhận để tính thời gian làm thêm.
 - Check-in/check-out theo thời gian Server, thiết bị đã phê duyệt, geofencing và tọa độ GPS từ Windows; máy
   không có cảm biến GPS có thể dùng địa chỉ IP LAN nội bộ khi cờ dự phòng được bật.
 - Admin/Manager xem riêng vĩ độ, kinh độ và sai số GPS lúc vào/ra trong **Quản lý chấm công**;
   Manager chỉ xem nhân viên thuộc phòng ban của mình.
 - Lịch làm việc, lịch sử chấm công và yêu cầu điều chỉnh.
-- Phân ca có bảng lịch tuần 7 ngày ngay dưới danh sách; Admin/Manager xem ca theo từng nhân viên,
-  nhân viên xem ca của mình trong trang Lịch làm việc. Có thể chuyển sang tuần trước/sau.
-- Màn phân ca dùng lịch chọn ngày trực quan, nút nhanh Hôm nay/Tuần này/Tuần sau/30 ngày,
-  hiển thị số ngày dự kiến phân ca và tên ca kèm giờ bắt đầu/kết thúc để chọn dễ dàng.
-- Các ô lọc Từ ngày/Đến ngày hiển thị rộng, có lịch popup dạng lưới với tuần bắt đầu Thứ Hai.
-- Một nhân viên không thể có hai ca khác nhau trong cùng một ngày; giao diện báo trước ngày trùng
-  và khóa nút lưu, Server từ chối yêu cầu trùng ca.
 - Nghỉ phép, quỹ phép, phân ca và duyệt yêu cầu; nhân viên có nút **Hủy đơn** đối với đơn đang chờ
   hoặc đơn đã duyệt nhưng chưa bắt đầu.
-- Nút **Gửi Random Check** nằm riêng trong **Xác minh ngẫu nhiên**, cho phép chọn
-  nhân viên đang hoạt động; cảnh báo và thông báo được cập nhật qua WebSocket.
+- Random Check, cảnh báo và thông báo WebSocket.
 - Cảnh báo lỗi rõ ràng cho lỗi nhập liệu, phân quyền, mạng LAN, timeout, cấu hình và lỗi Server.
 - Một nút Làm mới để đặt lại bộ lọc, phân trang và tải lại dữ liệu; hỗ trợ xuất Excel có
   tiêu đề, màu sắc, bộ lọc, dòng xen kẽ và định dạng in đẹp; dòng đang chọn được làm nổi bật.
-- Design system nhất quán: font Segoe UI dễ đọc, icon native rõ nét, nút/thẻ 3D
-  có gradient, viền nổi, bóng đổ và hiệu ứng nhấn; bảng có màu xen kẽ và dòng chọn nổi bật.
-  Thanh công cụ cuộn khi thiếu chỗ; cả chế độ sáng/tối đều giữ đúng tương phản màu.
+- Design system nhất quán: font Segoe UI dễ đọc, icon native rõ nét trên mọi nút, thanh công cụ
+  cuộn ngang khi thiếu chỗ, bảng tự căn cột/hàng và giữ nguyên nội dung đầy đủ trong tooltip;
+  Indigo cho nhân viên, Teal cho quản trị, thẻ bo góc và hiệu ứng chuyển trang nhẹ.
 - Quản lý nhân viên, phòng ban, chức vụ, ca làm và tài khoản.
 - Bảng lương tháng/năm cho Admin và Manager: tổng thực nhận, lương theo ngày công,
   thưởng chuyên cần, duyệt và tính tiền làm thêm giờ, biểu đồ màu, bảng chi tiết và xuất Excel. Manager chỉ xem/cập nhật
@@ -99,26 +130,22 @@ và quyền vị trí cho ứng dụng desktop. Khi nhấn CHECK-IN/CHECK-OUT, C
 sau được bật:
 
 - Client `config.json`: `"allow_lan_ip_location_fallback": true`.
-- Server `server.env`: `ALLOW_LAN_IP_LOCATION_FALLBACK=true`.
+- Server `server/.env` (hoặc `server.env` khi dùng bản portable): `ALLOW_LAN_IP_LOCATION_FALLBACK=true`.
 
 Server vẫn kiểm tra IP thuộc `ALLOWED_NETWORKS`, thiết bị đã được phê duyệt và lưu nguồn vị trí
 `LAN_IP_FALLBACK` trong kết quả nghiệp vụ. Đặt một trong hai cờ thành `false` để bắt buộc GPS.
-Dải mạng mặc định hỗ trợ IPv4 nội bộ, IPv6 loopback, ULA và link-local; địa chỉ IPv4 được
-Windows biểu diễn dưới dạng IPv6-mapped sẽ được chuẩn hóa trước khi kiểm tra.
-Nếu client kết nối qua Radmin VPN, chỉ thêm `26.0.0.0/8` vào `ALLOWED_NETWORKS` khi server
-không mở cổng ra Internet và các client thuộc mạng Radmin đáng tin cậy.
 
-Để chỉ cho phép chấm công trong phạm vi công ty, cấu hình `server.env` rồi khởi động lại Server:
+Để chỉ cho phép chấm công trong phạm vi Quán Hawa's Food Đà Nẵng, cấu hình `server/.env` (hoặc `server.env` nếu chạy bản portable) rồi khởi động lại Server:
 
 ```env
 GEOFENCING_ENABLED=true
-COMPANY_LATITUDE=10.776889
-COMPANY_LONGITUDE=106.700806
-GEOFENCE_RADIUS_METERS=200
-GEOFENCE_MAX_ACCURACY_METERS=250
+COMPANY_LATITUDE=16.0678
+COMPANY_LONGITUDE=108.2208
+GEOFENCE_RADIUS_METERS=50
+GEOFENCE_MAX_ACCURACY_METERS=100
 ```
 
-Khi bật geofencing, Server tự tính khoảng cách theo tọa độ WGS-84, từ chối GPS vượt bán kính hoặc
+Khi bật geofencing, Server tự tính khoảng cách theo giải thuật Haversine, từ chối GPS vượt bán kính $50\,\text{m}$ hoặc
 có sai số quá lớn và lưu khoảng cách tại thời điểm check-in/check-out. Muốn tuyệt đối bắt buộc GPS,
 đặt thêm `ALLOW_LAN_IP_LOCATION_FALLBACK=false`.
 
@@ -138,29 +165,33 @@ Trong `AttendanceAdmin`, chọn **Lương & chuyên cần**, chọn kỳ lương
 
 ## Chạy từ mã nguồn
 
-Yêu cầu Windows 10/11 và Python 3.12.
+Yêu cầu Windows 10/11 và Python 3.12 (hoặc Python 3.13).
 
 ```powershell
 .\scripts\setup.ps1
-.\scripts\run_all.ps1
+.\scripts\run_server.ps1
 ```
 
 `setup.ps1` tự tạo `server/.env` cùng JWT secret ngẫu nhiên ở lần chạy đầu và không ghi đè
-cấu hình hoặc database đã có dữ liệu. Không chép nguyên giá trị `CHANGE_...` trong file mẫu
-vào môi trường chạy.
+cấu hình hiện có. Không chép nguyên giá trị `CHANGE_...` trong file mẫu vào môi trường chạy.
 
-Nếu muốn chạy riêng từng thành phần để gỡ lỗi, mở ba PowerShell và dùng lần lượt:
+Mở giao diện Nhân viên (Client) trong PowerShell khác:
 
 ```powershell
-.\.venv\Scripts\python.exe .\server_launcher.py
-.\.venv\Scripts\python.exe .\admin_launcher.py
-.\.venv\Scripts\python.exe .\client_launcher.py
+.\.venv\Scripts\python.exe client_launcher.py
+```
+
+Mở giao diện Quản lý / Admin:
+
+```powershell
+.\.venv\Scripts\python.exe admin_launcher.py
 ```
 
 API mặc định: `http://127.0.0.1:8000`; OpenAPI: `http://127.0.0.1:8000/docs`.
 
-Khi chạy bằng `run_all.ps1`, đóng cửa sổ Server sẽ dừng cả Admin và User qua watchdog.
-Client trên máy khác vẫn giữ mở khi kết nối LAN bị gián đoạn.
+Khi chạy cả ba luồng trên cùng một máy, Client và Admin sẽ tự thoát sau vài giây nếu cửa sổ
+Server đã đóng. Cơ chế này chỉ áp dụng khi `server_url` trỏ về localhost, tên máy hoặc một IP LAN
+của chính máy đang chạy; Client trên máy khác vẫn giữ mở khi kết nối LAN bị gián đoạn.
 
 ## Chạy trong mạng LAN
 
@@ -178,15 +209,19 @@ Client trên máy khác vẫn giữ mở khi kết nối LAN bị gián đoạn.
 }
 ```
 
-## Kiểm thử
+Khi sao chép bản portable sang máy khác, phải sao chép cả thư mục, không
+chỉ sao chép file `.exe`.
+
+## Kiểm thử và đóng gói
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check server client admin scripts tests
 $env:QT_QPA_PLATFORM = "offscreen"
 .\.venv\Scripts\python.exe -m pytest -p no:cacheprovider -q
+.\scripts\build_portable.ps1
 ```
 
-Trạng thái hiện tại: **126 kiểm thử đạt**, Ruff không phát hiện lỗi.
+Trạng thái hiện tại: **101 kiểm thử đạt**, Ruff không phát hiện lỗi.
 
 ## Thư mục quan trọng
 
@@ -196,6 +231,7 @@ client/          Giao diện Client/Admin
 scripts/         Cài đặt, chạy, seed và build
 tests/           Kiểm thử tự động
 docs/            Tài liệu chi tiết
+dist_portable/   Ba gói portable, không commit lên Git
 ```
 
 Các tệp lớn đã được tách theo trách nhiệm để dễ bảo trì và trình bày đồ án:
@@ -209,6 +245,7 @@ Các tệp lớn đã được tách theo trách nhiệm để dễ bảo trì v
 - `client/app/ui/attendance_portal.py`, `leave_portal.py`, `payroll_ui.py`: nghiệp vụ giao diện
   chấm công, nghỉ phép và bảng lương.
 
-Không commit hoặc xóa nhầm `server/.env`, `client/config.json`, database SQLite hay bản sao lưu.
+Không commit `server/.env`, `client/config.json`, database SQLite hoặc bản sao
+lưu. Không xóa `dist_portable/AttendanceServer/data` nếu còn dữ liệu cần giữ.
 
 Tài liệu triển khai chi tiết: [docs/DEPLOYMENT_WINDOWS_LAN.md](docs/DEPLOYMENT_WINDOWS_LAN.md).
